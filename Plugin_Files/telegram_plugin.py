@@ -6,13 +6,32 @@ import json
 import importlib.util
 from pathlib import Path
 from threading import Thread
+import logging
 
 from telegram import Update
-from telegram.ext import Application, ContextTypes
+from telegram.ext import (
+    Application,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 ROOT = Path(__file__).parent.parent
 COMMANDS_DIR = ROOT / "commands"
 CONFIG_PATH = ROOT / "config_telegram.json"
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger("telegram_plugin")
+
+TOKEN = None
+try:
+    with CONFIG_PATH.open(encoding="utf-8") as f:
+        TOKEN = json.load(f).get("token")
+except Exception:
+    pass
 
 def bootstrap_commands():
     COMMANDS_DIR.mkdir(exist_ok=True)
@@ -34,13 +53,6 @@ handler = CommandHandler("start", start)
 ''', encoding='utf-8')
         print("[telegram_plugin] Created commands/start_cmd.py")
 
-TOKEN = None
-try:
-    with CONFIG_PATH.open(encoding="utf-8") as f:
-        TOKEN = json.load(f).get("token")
-except Exception:
-    pass
-
 def load_commands(app: Application):
     bootstrap_commands()
     for path in sorted(COMMANDS_DIR.glob("*_cmd.py")):
@@ -57,6 +69,15 @@ def load_commands(app: Application):
         except Exception as e:
             print(f"[telegram_plugin] Failed loading {path.name}: {e}")
 
+async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message:
+        user = update.effective_user
+        username = user.username or user.first_name
+        text = update.message.text or "[no text]"
+        chat_type = update.effective_chat.type
+
+        print(f"\033[36m[{chat_type.upper()}] {username}: {text}\033[0m")
+
 async def bot_main():
     if not TOKEN:
         print("[telegram_plugin] No valid token")
@@ -64,7 +85,10 @@ async def bot_main():
 
     print("[telegram_plugin] Building bot...")
     app = Application.builder().token(TOKEN).build()
+
     load_commands(app)
+
+    app.add_handler(MessageHandler(filters.TEXT | filters.COMMAND, log_message))
 
     await app.initialize()
     await app.start()
