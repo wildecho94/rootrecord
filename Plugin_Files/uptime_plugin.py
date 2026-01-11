@@ -5,7 +5,7 @@
 Uptime plugin - single-file version with periodic terminal update
 
 Displays/updates uptime/downtime + percentage every 10 seconds in yellow.
-Saves every single piece of data (current, total up/down, pct) to DB every 10s.
+Saves every single piece of data to DB every 10 seconds.
 """
 
 import asyncio
@@ -26,7 +26,7 @@ STATE_PATH = ROOT / "uptime_state.json"
 YELLOW = "\033[93m"
 RESET  = "\033[0m"
 
-# Initialize DB with separate columns for every value
+# Initialize DB with all columns
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
@@ -96,14 +96,14 @@ def get_stats():
 async def periodic_printer():
     while True:
         s = get_stats()
-        line = f"{YELLOW}[UPTIME] {s['now'].strftime('%H:%M:%S')} | " \
+        line = f"{YELLOW}[UPTIME] {s['now'].strftime('%Y-%m-%d %H:%M:%S')} | " \
                f"Current: {s['current_str']} ({s['current_sec']}s) | " \
                f"Total Up: {s['total_up_str']} ({s['total_up_sec']}s) | " \
                f"Total Down: {s['total_down_str']} ({s['total_down_sec']}s) | " \
                f"Pct: {s['uptime_pct']:.1f}%{RESET}"
         print(line)
 
-        # Save EVERY piece to database
+        # Save every piece to DB
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute('''
                 INSERT OR REPLACE INTO uptime_stats 
@@ -163,5 +163,5 @@ atexit.register(on_exit)
 def register_commands(app: Application):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
-    # Start periodic printer
+    # Start periodic printer in background
     asyncio.create_task(periodic_printer())
