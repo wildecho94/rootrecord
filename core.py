@@ -8,7 +8,6 @@ import os
 from datetime import datetime
 import sqlite3
 import importlib.util
-import time
 import asyncio
 
 BASE_DIR = Path(__file__).parent
@@ -36,7 +35,7 @@ def log_debug(message: str):
     ensure_logs_folder()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     line = f"[{timestamp}] {message}"
-    print(line)  # Mirror to console
+    print(line)  # Mirror EVERYTHING to console
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
