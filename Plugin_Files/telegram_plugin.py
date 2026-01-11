@@ -1,6 +1,10 @@
 # Plugin_Files/telegram_plugin.py
 # Edited Version: 1.42.20260111
 
+"""
+Telegram plugin - main entry point with global logging
+"""
+
 import asyncio
 import json
 import importlib.util
@@ -20,10 +24,9 @@ ROOT = Path(__file__).parent.parent
 COMMANDS_DIR = ROOT / "commands"
 CONFIG_PATH = ROOT / "config_telegram.json"
 
-# Logging setup for detailed terminal output
 logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    level=logging.DEBUG  # ← DEBUG for maximum visibility
+    level=logging.DEBUG
 )
 logger = logging.getLogger("telegram_plugin")
 
@@ -33,11 +36,11 @@ try:
         config = json.load(f)
         TOKEN = config.get("bot_token")
     if TOKEN:
-        print("[telegram_plugin] Token loaded successfully")
+        logger.info("Token loaded successfully")
     else:
-        print("[telegram_plugin] bot_token is empty or missing in config_telegram.json")
+        logger.warning("bot_token is empty or missing in config_telegram.json")
 except Exception as e:
-    print(f"[telegram_plugin] Failed to load config: {e}")
+    logger.error(f"Failed to load config: {e}")
 
 def bootstrap_commands():
     COMMANDS_DIR.mkdir(exist_ok=True)
@@ -57,7 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 handler = CommandHandler("start", start)
 ''', encoding='utf-8')
-        print("[telegram_plugin] Created commands/start_cmd.py")
+        logger.info("Created commands/start_cmd.py")
 
 def load_commands(app: Application):
     bootstrap_commands()
@@ -71,57 +74,53 @@ def load_commands(app: Application):
             spec.loader.exec_module(module)
             if hasattr(module, "handler"):
                 app.add_handler(module.handler)
-                print(f"[telegram_plugin] Loaded command /{cmd_name}")
+                logger.info(f"Loaded command /{cmd_name}")
             else:
-                print(f"[telegram_plugin] {path.name} has no 'handler'")
+                logger.warning(f"{path.name} has no 'handler'")
         except Exception as e:
-            print(f"[telegram_plugin] Failed to load {path.name}: {type(e).__name__}: {e}")
+            logger.error(f"Failed to load {path.name}: {type(e).__name__}: {e}")
 
 async def log_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log every incoming update with full details"""
-    if update:
-        print(f"[telegram DEBUG] Received update: {update.to_dict()}")
     if update.message:
         msg = update.message
         user = msg.from_user
         chat = msg.chat
-        text = msg.text or msg.caption or "[no text/content]"
+        text = msg.text or msg.caption or "[no text]"
         prefix = "COMMAND" if text.startswith('/') else "MESSAGE"
-        print(f"[telegram] {prefix} from {user.username or user.full_name} "
-              f"(id:{user.id}) in {chat.type} '{chat.title or chat.username or chat.id}': {text}")
+        logger.info(f"{prefix} from {user.username or user.full_name} (id:{user.id}) in {chat.type} '{chat.title or chat.username or chat.id}': {text}")
 
 async def bot_main():
     if not TOKEN:
-        print("[telegram_plugin] No valid token → exiting")
+        logger.warning("No valid token → exiting")
         return
 
-    print("[telegram_plugin] Initializing application...")
+    logger.info("Initializing application...")
     app = Application.builder().token(TOKEN).build()
 
-    print("[telegram_plugin] Loading commands...")
+    logger.info("Loading commands...")
     load_commands(app)
 
-    print("[telegram_plugin] Adding global message logger (all updates)...")
+    logger.info("Adding global message logger (all updates)...")
     app.add_handler(MessageHandler(filters.ALL, log_update))
 
-    print("[telegram_plugin] Starting bot...")
+    logger.info("Starting bot...")
     await app.initialize()
     await app.start()
 
-    print("[telegram_plugin] Starting polling (drop pending = True)...")
+    logger.info("Starting polling (drop pending = True)...")
     await app.updater.start_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES,
-        poll_interval=0.5,      # faster polling for debugging
+        poll_interval=0.5,
         timeout=10
     )
 
-    print("[telegram_plugin] Polling active – bot should now receive updates")
+    logger.info("Polling active – bot should now receive updates")
     await asyncio.Event().wait()
 
 def initialize():
     if TOKEN:
-        print("[telegram_plugin] Launching bot in background thread...")
+        logger.info("Launching bot in background thread...")
         Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
     else:
-        print("[telegram_plugin] No token – telegram disabled")
+        logger.warning("No token – telegram disabled")
