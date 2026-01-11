@@ -12,4 +12,5 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Still early — more features coming."
     )
 
+
 handler = CommandHandler("start", start)
