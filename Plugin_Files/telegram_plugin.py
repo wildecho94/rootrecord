@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Edited Version: 1.42.20260110
+# Edited Version: 1.42.20260111
 
 import asyncio
 import json
@@ -7,14 +7,14 @@ import importlib.util
 from pathlib import Path
 from threading import Thread
 
-from telegram.ext import Application, Update
+from telegram import Update
+from telegram.ext import Application, ContextTypes
 
 ROOT = Path(__file__).parent.parent
 COMMANDS_DIR = ROOT / "commands"
 CONFIG_PATH = ROOT / "config_telegram.json"
 
 def bootstrap_commands():
-    """Create commands folder and basic start command if missing"""
     COMMANDS_DIR.mkdir(exist_ok=True)
     start_file = COMMANDS_DIR / "start_cmd.py"
     if not start_file.exists():
@@ -34,15 +34,12 @@ handler = CommandHandler("start", start)
 ''', encoding='utf-8')
         print("[telegram_plugin] Created commands/start_cmd.py")
 
-
-# Load token
 TOKEN = None
 try:
     with CONFIG_PATH.open(encoding="utf-8") as f:
         TOKEN = json.load(f).get("token")
 except Exception:
     pass
-
 
 def load_commands(app: Application):
     bootstrap_commands()
@@ -60,7 +57,6 @@ def load_commands(app: Application):
         except Exception as e:
             print(f"[telegram_plugin] Failed loading {path.name}: {e}")
 
-
 async def bot_main():
     if not TOKEN:
         print("[telegram_plugin] No valid token")
@@ -73,18 +69,12 @@ async def bot_main():
     await app.initialize()
     await app.start()
     print("[telegram_plugin] Starting polling...")
-    await app.updater.start_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
-    )
-    print("[telegram_plugin] Polling active — bot is now live")
+    await app.updater.start_polling(drop_pending_updates=True)
+    print("[telegram_plugin] Polling active")
 
-    await asyncio.Event().wait()  # keep running
-
+    await asyncio.Event().wait()
 
 def initialize():
     if TOKEN:
-        def target():
-            asyncio.run(bot_main())
-        Thread(target=target, daemon=True).start()
-        print("[telegram_plugin] Telegram polling thread started")
+        Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
+        print("[telegram_plugin] Telegram thread started")
