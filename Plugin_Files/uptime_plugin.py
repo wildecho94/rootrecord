@@ -1,13 +1,6 @@
 # Plugin_Files/uptime_plugin.py
 # Edited Version: 1.42.20260111
 
-"""
-Uptime plugin - single-file version with reliable periodic update
-
-Calculates and prints total uptime/downtime/percentage every 60 seconds (and once on startup).
-Writes snapshot to uptime_stats table every time (separate columns).
-"""
-
 import asyncio
 import sqlite3
 from datetime import datetime, timedelta
