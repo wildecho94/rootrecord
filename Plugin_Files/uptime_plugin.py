@@ -2,13 +2,15 @@
 # Edited Version: 1.42.20260111
 
 """
-Uptime plugin - single-file version with reliable periodic update
+Uptime plugin - single-file version with reliable periodic update using daemon thread
 
 Calculates and prints total uptime/downtime/percentage every 60 seconds (and once on startup).
 Writes snapshot to uptime_stats table every time (separate columns).
+Uses separate thread to avoid asyncio starvation from telegram polling.
 """
 
-import asyncio
+import threading
+import time
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -79,7 +81,6 @@ def calculate_uptime_stats():
 
         last_time = ts
 
-    # Current session
     if in_uptime and last_time:
         current = now - last_time
         total_up += current
@@ -111,14 +112,14 @@ def save_stats_to_db(s):
         ''', (now, s['total_up_sec'], s['total_down_sec'], s['uptime_pct']))
         conn.commit()
 
-# Periodic update task (every 60 seconds)
-async def periodic_uptime_update():
-    print("[uptime_plugin] Periodic uptime update task started (every 60s)")
+# Periodic update function (runs in daemon thread)
+def periodic_uptime_update():
+    print("[uptime_plugin] Periodic uptime update thread started (every 60s)")
     while True:
         s = calculate_uptime_stats()
         print_uptime_stats(s)
         save_stats_to_db(s)
-        await asyncio.sleep(60)
+        time.sleep(60)
 
 # Command handler
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -144,6 +145,10 @@ s = calculate_uptime_stats()
 print_uptime_stats(s)
 save_stats_to_db(s)
 
+# Start periodic update in daemon thread
+thread = threading.Thread(target=periodic_uptime_update, daemon=True)
+thread.start()
+
 # Graceful shutdown
 import atexit
 def on_exit():
@@ -158,4 +163,3 @@ atexit.register(on_exit)
 def register_commands(app: Application):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
-    asyncio.create_task(periodic_uptime_update())
