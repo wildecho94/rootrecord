@@ -4,10 +4,9 @@
 """
 Uptime plugin - single-file version with periodic terminal update
 
-Removes JSON state file.
-Calculates uptime percentage using raw DB data (start/stop events).
-Displays full stats in yellow every 10 seconds.
-Saves current snapshot every 10 seconds.
+Calculates uptime percentage from raw DB events (start/stop).
+Displays all stats in yellow every 10 seconds.
+Saves snapshot every 10 seconds.
 """
 
 import asyncio
@@ -39,16 +38,13 @@ def init_db():
         ''')
         conn.commit()
 
-# Get all start/stop events sorted by time
+# Get all events sorted by time
 def get_all_events():
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute("SELECT event_type, timestamp FROM uptime_records ORDER BY id ASC").fetchall()
-    events = []
-    for typ, ts in rows:
-        events.append((typ, datetime.fromisoformat(ts)))
-    return events
+    return [(typ, datetime.fromisoformat(ts)) for typ, ts in rows]
 
-# Calculate current uptime, total up/down, percentage from raw events
+# Calculate stats from raw events
 def calculate_uptime_stats():
     events = get_all_events()
     if not events:
@@ -97,7 +93,7 @@ def calculate_uptime_stats():
         "uptime_pct": f"{pct:.1f}"
     }
 
-# Periodic printer (every 10 seconds)
+# Periodic printer
 async def periodic_printer():
     while True:
         s = calculate_uptime_stats()
@@ -128,7 +124,7 @@ with sqlite3.connect(DB_PATH) as conn:
                  ("start", datetime.utcnow().isoformat()))
     conn.commit()
 
-# Graceful shutdown (best-effort)
+# Graceful shutdown
 import atexit
 def on_exit():
     now = datetime.utcnow()
