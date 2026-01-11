@@ -100,7 +100,7 @@ def print_uptime_stats(s):
            f"Total Down: {timedelta(seconds=s['total_down_sec'])} | Uptime: {s['uptime_pct']:.3f}%{RESET}"
     print(line)
 
-# Save snapshot to DB
+# Save stats snapshot to DB
 def save_stats_to_db(s):
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
