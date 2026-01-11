@@ -1,3 +1,6 @@
+# RootRecord rootrecord/.gitignore
+# Edited Version: 1.42.20260111
+
 # Python
 __pycache__/
 *.pyc
@@ -7,10 +10,13 @@ env/
 venv/
 .venv/
 
-# Project specific
+# Project
 logs/
 backups/
 data/rootrecord.db
-config_telegram.json
+
+# Configs
 config_*.json
-*.json
+
+# Logs - exclude from git
+debug_rootrecord.log
