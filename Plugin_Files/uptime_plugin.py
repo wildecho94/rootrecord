@@ -4,9 +4,10 @@
 """
 Uptime plugin - single-file version with periodic terminal update
 
-Calculates uptime percentage from raw DB events (start/stop).
-Displays all stats in yellow every 10 seconds.
-Saves snapshot every 10 seconds.
+Every 60 seconds (and once on startup):
+- Calculates total uptime and total downtime from raw DB events (start/stop/crash)
+- Computes uptime percentage as decimal ratio
+- Prints full stats in yellow to terminal
 """
 
 import asyncio
@@ -31,7 +32,7 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS uptime_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type TEXT NOT NULL,           -- 'start' / 'stop' / 'crash'
+                event_type TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 uptime_seconds INTEGER DEFAULT 0
             )
@@ -44,12 +45,11 @@ def get_all_events():
         rows = conn.execute("SELECT event_type, timestamp FROM uptime_records ORDER BY id ASC").fetchall()
     return [(typ, datetime.fromisoformat(ts)) for typ, ts in rows]
 
-# Calculate stats from raw events
+# Calculate uptime stats from raw events
 def calculate_uptime_stats():
     events = get_all_events()
     if not events:
         return {
-            "current": "0:00:00",
             "total_uptime": "0:00:00",
             "total_downtime": "0:00:00",
             "uptime_pct": "100.0"
@@ -76,40 +76,39 @@ def calculate_uptime_stats():
 
         last_time = ts
 
-    # Current session
+    # Current ongoing session
     if in_uptime and last_time:
         current = now - last_time
         total_uptime += current
-    else:
-        current = timedelta(0)
 
     total_time = total_uptime + total_downtime
     pct = 100.0 if total_time.total_seconds() == 0 else (total_uptime / total_time * 100)
 
     return {
-        "current": str(current),
         "total_uptime": str(total_uptime),
         "total_downtime": str(total_downtime),
-        "uptime_pct": f"{pct:.1f}"
+        "uptime_pct": f"{pct:.3f}"
     }
 
-# Periodic printer
+# Print stats in yellow
+def print_uptime_stats():
+    s = calculate_uptime_stats()
+    now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    line = f"{YELLOW}[UPTIME] {now_str} | Total Up: {s['total_uptime']} | " \
+           f"Total Down: {s['total_downtime']} | Uptime: {s['uptime_pct']}%{RESET}"
+    print(line)
+
+# Periodic printer (every 60 seconds)
 async def periodic_printer():
     while True:
-        s = calculate_uptime_stats()
-        line = f"{YELLOW}[UPTIME] {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} | " \
-               f"Current: {s['current']} | Total Up: {s['total_uptime']} | " \
-               f"Total Down: {s['total_downtime']} | Pct: {s['uptime_pct']}%{RESET}"
-        print(line)
-
-        await asyncio.sleep(10)
+        print_uptime_stats()
+        await asyncio.sleep(60)
 
 # Command handler
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = calculate_uptime_stats()
     text = (
         f"**Uptime Stats**\n"
-        f"• Current session: {s['current']}\n"
         f"• Total uptime ever: {s['total_uptime']}\n"
         f"• Total downtime: {s['total_downtime']}\n"
         f"• Uptime percentage: {s['uptime_pct']}%"
@@ -123,6 +122,9 @@ with sqlite3.connect(DB_PATH) as conn:
     conn.execute("INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
                  ("start", datetime.utcnow().isoformat()))
     conn.commit()
+
+# Print stats immediately on startup
+print_uptime_stats()
 
 # Graceful shutdown
 import atexit
