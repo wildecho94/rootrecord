@@ -8,7 +8,6 @@ import os
 from datetime import datetime
 import sqlite3
 import importlib.util
-import time
 import asyncio
 
 BASE_DIR = Path(__file__).parent
@@ -228,17 +227,22 @@ def initialize_system():
 
     print(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
+# Global event loop for all background tasks
+loop = asyncio.get_event_loop()
+
 async def main_loop():
+    print("[core] Main asyncio loop running - all periodic tasks use this")
     while True:
-        await asyncio.sleep(60)  # Keep event loop alive, allow tasks to run
+        await asyncio.sleep(60)  # Keep loop alive
 
 if __name__ == "__main__":
     initialize_system()
     print("RootRecord is running. Press Ctrl+C to stop.\n")
 
-    # Start main asyncio loop for background tasks
+    # Run the main loop (all asyncio tasks will share this)
     try:
-        asyncio.run(main_loop())
+        loop.run_until_complete(main_loop())
     except KeyboardInterrupt:
         print("\nShutting down RootRecord...")
+        # Graceful shutdown for plugins if needed
         sys.exit(0)
