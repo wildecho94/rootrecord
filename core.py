@@ -1,10 +1,13 @@
-# rootrecord/core.py
+# RootRecord core.py # Edited Version: 1.42.20260110
+
 from pathlib import Path
 import sys
 import shutil
 import os
 from datetime import datetime
 import sqlite3
+import importlib.util
+import time
 
 BASE_DIR = Path(__file__).parent
 
@@ -53,12 +56,7 @@ def clear_pycache():
 
 
 def ignore_zip_files(src, names):
-    """Custom ignore function for copytree: skip .zip / .ZIP files"""
-    ignored = []
-    for name in names:
-        if name.lower().endswith('.zip'):
-            ignored.append(name)
-    return ignored
+    return [name for name in names if name.lower().endswith('.zip')]
 
 
 def make_startup_backup():
@@ -67,27 +65,23 @@ def make_startup_backup():
     backup_dir.mkdir(parents=True, exist_ok=True)
     log_debug(f"Starting backup → {backup_dir}")
 
-    # Custom copy with .zip ignore
     for name, source in FOLDERS.items():
         if source.exists():
             dest = backup_dir / name
             shutil.copytree(
-                source,
-                dest,
+                source, dest,
                 ignore=ignore_zip_files,
                 dirs_exist_ok=True
             )
-            log_debug(f"  Backed up {name} (skipped any .zip files)")
+            log_debug(f"  Backed up {name} (skipped .zip files)")
 
-    # Also backup data folder (database) with the same ignore
     if DATA_FOLDER.exists():
         shutil.copytree(
-            DATA_FOLDER,
-            backup_dir / "data",
+            DATA_FOLDER, backup_dir / "data",
             ignore=ignore_zip_files,
             dirs_exist_ok=True
         )
-        log_debug("  Backed up data folder (database + skipped any .zip)")
+        log_debug("  Backed up data folder (database + skipped .zip)")
 
     log_debug("Backup completed")
 
@@ -123,20 +117,19 @@ def ensure_database():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        cursor.execute("INSERT OR REPLACE INTO system_info (key, value) VALUES ('version', '0.1-initial')")
+        cursor.execute("INSERT OR REPLACE INTO system_info (key,value) VALUES ('version','0.1-initial')")
         conn.commit()
         conn.close()
-        print("    Database created with basic structure")
     except Exception as e:
-        print(f"    Failed to create database: {e}")
+        print(f"  Database creation failed: {e}")
 
 
 def ensure_blank_plugin_template():
-    plugin_name = "blank_plugin"
+    name = "blank_plugin"
     files = [
-        (PLUGIN_FOLDER / f"{plugin_name}.py",        "main entry point"),
-        (CORE_FOLDER   / f"{plugin_name}_core.py",   "core logic"),
-        (HANDLER_FOLDER/ f"{plugin_name}_handler.py","event/command handlers")
+        (PLUGIN_FOLDER / f"{name}.py",        "main entry point"),
+        (CORE_FOLDER   / f"{name}_core.py",   "core logic"),
+        (HANDLER_FOLDER/ f"{name}_handler.py","event/command handlers")
     ]
 
     missing = [p for p, _ in files if not p.exists()]
@@ -203,6 +196,34 @@ def print_discovery_report(plugins: set):
     print("─" * 60)
 
 
+def auto_run_plugins(plugins: set):
+    """Auto-load and run initialize() for each discovered plugin"""
+    print("\nAuto-running discovered plugins...")
+    for name in sorted(plugins):
+        plugin_path = PLUGIN_FOLDER / f"{name}.py"
+        if not plugin_path.exists():
+            continue
+
+        try:
+            spec = importlib.util.spec_from_file_location(name, str(plugin_path))
+            if not spec or not spec.loader:
+                print(f"  Failed to load {name}: invalid module")
+                continue
+
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            spec.loader.exec_module(module)
+
+            if hasattr(module, "initialize"):
+                module.initialize()
+                print(f"  → {name} initialized")
+            else:
+                print(f"  → {name} loaded (no initialize() function)")
+
+        except Exception as e:
+            print(f"  Failed to auto-run {name}: {e}")
+
+
 def initialize_system():
     print("rootrecord system starting...\n")
 
@@ -216,8 +237,17 @@ def initialize_system():
     plugins = discover_plugin_names()
     print_discovery_report(plugins)
 
+    auto_run_plugins(plugins)
+
     print(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
 
 if __name__ == "__main__":
     initialize_system()
+    print("RootRecord is running. Press Ctrl+C to stop.\n")
+    try:
+        while True:
+            time.sleep(60)  # Keep process alive, low CPU usage
+    except KeyboardInterrupt:
+        print("\nShutting down RootRecord...")
+        sys.exit(0)

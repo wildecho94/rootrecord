@@ -1,0 +1,24 @@
+{
+  "bot_token": "8401358759:AAFJj7sdBObezppeHl8KE5Wleocw6ZJsv1c",
+  "enabled": true,
+  "default_parse_mode": "HTML",
+  "connections": {
+    "dm": {
+      "enabled": false,
+      "allowed_users": []
+    },
+    "groups": {
+      "enabled": false,
+      "chat_ids": []
+    },
+    "supergroups": {
+      "enabled": false,
+      "chat_ids": [],
+      "topics": {}
+    },
+    "channels": {
+      "enabled": false,
+      "chat_ids": []
+    }
+  }
+}
