@@ -2,12 +2,10 @@
 # Edited Version: 1.42.20260111
 
 """
-Uptime plugin - single-file version with reliable periodic terminal update
+Uptime plugin - single-file version with reliable periodic update
 
-Every 60 seconds (and once on startup):
-- Calculates total uptime/downtime/percentage from raw DB events
-- Prints stats in yellow to console
-- Writes snapshot to uptime_stats table
+Refreshes and prints uptime stats every 60 seconds (and once on startup).
+No full restart needed — uses asyncio loop for clean timing.
 """
 
 import asyncio
@@ -81,7 +79,6 @@ def calculate_uptime_stats():
 
         last_time = ts
 
-    # Current session
     if in_uptime and last_time:
         current = now - last_time
         total_up += current
@@ -95,14 +92,14 @@ def calculate_uptime_stats():
         "uptime_pct": pct
     }
 
-# Print stats in yellow
+# Print stats
 def print_uptime_stats(s):
     now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{YELLOW}[UPTIME] {now_str} | Total Up: {timedelta(seconds=s['total_up_sec'])} | " \
            f"Total Down: {timedelta(seconds=s['total_down_sec'])} | Uptime: {s['uptime_pct']:.3f}%{RESET}"
     print(line)
 
-# Save snapshot to DB
+# Save snapshot
 def save_stats_to_db(s):
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
@@ -113,23 +110,23 @@ def save_stats_to_db(s):
         ''', (now, s['total_up_sec'], s['total_down_sec'], s['uptime_pct']))
         conn.commit()
 
-# Periodic update task (every 60 seconds)
+# Periodic task (every 60 seconds)
 async def periodic_uptime_update():
-    print("[uptime_plugin] Starting periodic uptime update task (every 60s)")
+    print("[uptime_plugin] Periodic uptime update task started (every 60s)")
     while True:
         s = calculate_uptime_stats()
         print_uptime_stats(s)
         save_stats_to_db(s)
         await asyncio.sleep(60)
 
-# Command handler
+# Command
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = calculate_uptime_stats()
     text = (
         f"**Uptime Stats**\n"
-        f"• Total uptime ever: {timedelta(seconds=s['total_up_sec'])}\n"
+        f"• Total uptime: {timedelta(seconds=s['total_up_sec'])}\n"
         f"• Total downtime: {timedelta(seconds=s['total_down_sec'])}\n"
-        f"• Uptime percentage: {s['uptime_pct']:.3f}%"
+        f"• Uptime %: {s['uptime_pct']:.3f}%"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -141,7 +138,7 @@ with sqlite3.connect(DB_PATH) as conn:
                  ("start", datetime.utcnow().isoformat()))
     conn.commit()
 
-# Initial stats print + save
+# Initial print + save
 s = calculate_uptime_stats()
 print_uptime_stats(s)
 save_stats_to_db(s)
@@ -160,5 +157,4 @@ atexit.register(on_exit)
 def register_commands(app: Application):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
-    # Start the periodic task
     asyncio.create_task(periodic_uptime_update())
