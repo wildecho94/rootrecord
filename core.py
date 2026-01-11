@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 import sqlite3
 import importlib.util
+import time
 import asyncio
 
 BASE_DIR = Path(__file__).parent
@@ -34,8 +35,10 @@ def ensure_logs_folder():
 def log_debug(message: str):
     ensure_logs_folder()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    line = f"[{timestamp}] {message}"
+    print(line)  # Mirror to console
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {message}\n")
+        f.write(line + "\n")
 
 def clear_pycache():
     count = 0
@@ -50,7 +53,7 @@ def clear_pycache():
                 except Exception as e:
                     log_debug(f"Failed to remove {path}: {e}")
     if count:
-        print(f"  Cleared {count} __pycache__ folder(s)")
+        log_debug(f"  Cleared {count} __pycache__ folder(s)")
 
 def ignore_zip_files(src, names):
     return [name for name in names if name.lower().endswith('.zip')]
@@ -86,20 +89,20 @@ def ensure_folder_and_init(folder: Path):
     init = folder / "__init__.py"
     if not init.exists():
         init.touch()
-        print(f"  Created __init__.py in {folder.name}")
+        log_debug(f"  Created __init__.py in {folder.name}")
 
 def ensure_all_folders():
-    print("Preparing folders...")
+    log_debug("Preparing folders...")
     for folder in FOLDERS.values():
         ensure_folder_and_init(folder)
-        print(f"  ✓ {folder.name}")
+        log_debug(f"  ✓ {folder.name}")
 
 def ensure_database():
     DATA_FOLDER.mkdir(exist_ok=True)
     if DATABASE.exists():
         return
 
-    print("  → Creating initial database: rootrecord.db")
+    log_debug("  → Creating initial database: rootrecord.db")
     try:
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
@@ -114,7 +117,7 @@ def ensure_database():
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"  Database creation failed: {e}")
+        log_debug(f"  Database creation failed: {e}")
 
 def ensure_blank_plugin_template():
     name = "blank_plugin"
@@ -128,7 +131,7 @@ def ensure_blank_plugin_template():
     if not missing:
         return
 
-    print(f"  → Missing blank_plugin files: {len(missing)}")
+    log_debug(f"  → Missing blank_plugin files: {len(missing)}")
     for path, purpose in files:
         if path.exists():
             continue
@@ -146,9 +149,9 @@ print("[blank_plugin] {path.stem} loaded")
 '''
         try:
             path.write_text(content.strip(), encoding="utf-8")
-            print(f"    Created: {path.name}")
+            log_debug(f"    Created: {path.name}")
         except Exception as e:
-            print(f"    Failed to create {path.name}: {e}")
+            log_debug(f"    Failed to create {path.name}: {e}")
 
 def discover_plugin_names() -> set:
     names = set()
@@ -173,19 +176,19 @@ def get_plugin_status(name: str) -> list:
 
 def print_discovery_report(plugins: set):
     if not plugins:
-        print("\nNo plugins detected in Plugin_Files/")
+        log_debug("\nNo plugins detected in Plugin_Files/")
         return
 
-    print(f"\nDiscovered {len(plugins)} potential plugin(s):")
-    print("─" * 60)
+    log_debug(f"\nDiscovered {len(plugins)} potential plugin(s):")
+    log_debug("─" * 60)
     for name in sorted(plugins):
         parts = get_plugin_status(name)
         status = ", ".join(parts) if parts else "incomplete"
-        print(f"  {name:18} → {status}")
-    print("─" * 60)
+        log_debug(f"  {name:18} → {status}")
+    log_debug("─" * 60)
 
 def auto_run_plugins(plugins: set):
-    print("\nAuto-running discovered plugins...")
+    log_debug("\nAuto-running discovered plugins...")
     for name in sorted(plugins):
         plugin_path = PLUGIN_FOLDER / f"{name}.py"
         if not plugin_path.exists():
@@ -194,7 +197,7 @@ def auto_run_plugins(plugins: set):
         try:
             spec = importlib.util.spec_from_file_location(name, str(plugin_path))
             if not spec or not spec.loader:
-                print(f"  Failed to load {name}: invalid module")
+                log_debug(f"  Failed to load {name}: invalid module")
                 continue
 
             module = importlib.util.module_from_spec(spec)
@@ -203,15 +206,15 @@ def auto_run_plugins(plugins: set):
 
             if hasattr(module, "initialize"):
                 module.initialize()
-                print(f"  → {name} initialized")
+                log_debug(f"  → {name} initialized")
             else:
-                print(f"  → {name} loaded (no initialize() function)")
+                log_debug(f"  → {name} loaded (no initialize() function)")
 
         except Exception as e:
-            print(f"  Failed to auto-run {name}: {e}")
+            log_debug(f"  Failed to auto-run {name}: {e}")
 
 def initialize_system():
-    print("rootrecord system starting...\n")
+    log_debug("rootrecord system starting...\n")
 
     clear_pycache()
     make_startup_backup()
@@ -225,24 +228,19 @@ def initialize_system():
 
     auto_run_plugins(plugins)
 
-    print(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
-
-# Global event loop for all background tasks
-loop = asyncio.get_event_loop()
+    log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
 async def main_loop():
-    print("[core] Main asyncio loop running - all periodic tasks use this")
+    log_debug("[core] Main asyncio loop running - all background tasks active")
     while True:
         await asyncio.sleep(60)  # Keep loop alive
 
 if __name__ == "__main__":
     initialize_system()
-    print("RootRecord is running. Press Ctrl+C to stop.\n")
+    log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
 
-    # Run the main loop (all asyncio tasks will share this)
     try:
-        loop.run_until_complete(main_loop())
+        asyncio.run(main_loop())
     except KeyboardInterrupt:
-        print("\nShutting down RootRecord...")
-        # Graceful shutdown for plugins if needed
+        log_debug("\nShutting down RootRecord...")
         sys.exit(0)
