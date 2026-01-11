@@ -2,12 +2,13 @@
 # Edited Version: 1.42.20260111
 
 """
-Uptime plugin - single-file version
+Uptime plugin - single-file version with periodic terminal update
 
-Tracks bot uptime/downtime using JSON state + SQLite logging.
-Command: /uptime
+Displays/updates uptime/downtime + percentage every 10 seconds in yellow.
+Saves every single piece of data (current, total up/down, pct) to DB every 10s.
 """
 
+import asyncio
 import json
 import sqlite3
 from datetime import datetime, timedelta
@@ -21,20 +22,28 @@ ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 STATE_PATH = ROOT / "uptime_state.json"
 
-# Initialize DB
+# Colors
+YELLOW = "\033[93m"
+RESET  = "\033[0m"
+
+# Initialize DB with separate columns for every value
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
-            CREATE TABLE IF NOT EXISTS uptime_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
-                uptime_seconds INTEGER DEFAULT 0
+            CREATE TABLE IF NOT EXISTS uptime_stats (
+                timestamp TEXT PRIMARY KEY,
+                current_uptime_sec INTEGER,
+                total_uptime_sec INTEGER,
+                total_downtime_sec INTEGER,
+                uptime_percentage REAL,
+                current_uptime_str TEXT,
+                total_uptime_str TEXT,
+                total_downtime_str TEXT
             )
         ''')
         conn.commit()
 
-# State management
+# State
 def load_state():
     if STATE_PATH.exists():
         try:
@@ -63,7 +72,7 @@ def save_state(last_start, last_end, total_uptime, total_downtime):
     except Exception as e:
         print(f"[uptime] State save failed: {e}")
 
-# Stats
+# Get current stats (all pieces)
 def get_stats():
     state = load_state()
     now = datetime.utcnow()
@@ -71,30 +80,63 @@ def get_stats():
     total_up = state["total_uptime"] + current
     total_time = total_up + state["total_downtime"]
     pct = 100.0 if total_time.total_seconds() == 0 else (total_up / total_time * 100)
+
     return {
-        "current": str(current),
-        "total_uptime": str(total_up),
-        "total_downtime": str(state["total_downtime"]),
-        "uptime_pct": f"{pct:.1f}%",
-        "last_start": state["last_start"].isoformat() if state["last_start"] else "never",
-        "last_end": state["last_end"].isoformat() if state["last_end"] else "never"
+        "now": now,
+        "current_sec": int(current.total_seconds()),
+        "total_up_sec": int(total_up.total_seconds()),
+        "total_down_sec": int(state["total_downtime"].total_seconds()),
+        "uptime_pct": pct,
+        "current_str": str(current),
+        "total_up_str": str(total_up),
+        "total_down_str": str(state["total_downtime"])
     }
+
+# Periodic printer + DB save (every 10 seconds)
+async def periodic_printer():
+    while True:
+        s = get_stats()
+        line = f"{YELLOW}[UPTIME] {s['now'].strftime('%H:%M:%S')} | " \
+               f"Current: {s['current_str']} ({s['current_sec']}s) | " \
+               f"Total Up: {s['total_up_str']} ({s['total_up_sec']}s) | " \
+               f"Total Down: {s['total_down_str']} ({s['total_down_sec']}s) | " \
+               f"Pct: {s['uptime_pct']:.1f}%{RESET}"
+        print(line)
+
+        # Save EVERY piece to database
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO uptime_stats 
+                (timestamp, current_uptime_sec, total_uptime_sec, total_downtime_sec, 
+                 uptime_percentage, current_uptime_str, total_uptime_str, total_downtime_str)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                s['now'].isoformat(),
+                s['current_sec'],
+                s['total_up_sec'],
+                s['total_down_sec'],
+                s['uptime_pct'],
+                s['current_str'],
+                s['total_up_str'],
+                s['total_down_str']
+            ))
+            conn.commit()
+
+        await asyncio.sleep(10)
 
 # Command
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = get_stats()
     text = (
         f"**Uptime Stats**\n"
-        f"• Current: {s['current']}\n"
-        f"• Total uptime: {s['total_uptime']}\n"
-        f"• Total downtime: {s['total_downtime']}\n"
-        f"• Uptime %: {s['uptime_pct']}\n"
-        f"• Last start: {s['last_start']}\n"
-        f"• Last end: {s['last_end']}"
+        f"• Current session: {s['current_str']} ({s['current_sec']}s)\n"
+        f"• Total uptime ever: {s['total_up_str']} ({s['total_up_sec']}s)\n"
+        f"• Total downtime: {s['total_down_str']} ({s['total_down_sec']}s)\n"
+        f"• Uptime percentage: {s['uptime_pct']:.1f}%"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
-# Startup logging
+# Startup
 last_start = datetime.utcnow()
 init_db()
 
@@ -117,7 +159,9 @@ def on_exit():
         conn.commit()
 atexit.register(on_exit)
 
-# Registration function (called from telegram_plugin)
-def register_commands(app):
+# Registration
+def register_commands(app: Application):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
+    # Start periodic printer
+    asyncio.create_task(periodic_printer())
