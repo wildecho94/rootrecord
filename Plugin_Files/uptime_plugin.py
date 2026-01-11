@@ -94,11 +94,10 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
-# Startup / shutdown
+# Startup logging
 last_start = datetime.utcnow()
 init_db()
 
-# Log startup
 with sqlite3.connect(DB_PATH) as conn:
     conn.execute("INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
                  ("start", datetime.utcnow().isoformat()))
@@ -119,6 +118,6 @@ def on_exit():
 atexit.register(on_exit)
 
 # Registration function (called from telegram_plugin)
-def register_commands(app: Application):
+def register_commands(app):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
