@@ -7,7 +7,7 @@ Uptime plugin - single-file version with periodic terminal update
 Every 60 seconds (and once on startup):
 - Calculates total uptime, total downtime, and percentage from raw DB events
 - Prints stats in yellow to terminal
-- Writes calculated values to uptime_stats table every time
+- Writes snapshot to uptime_stats table every time (separate columns)
 """
 
 import asyncio
@@ -26,10 +26,9 @@ DB_PATH = ROOT / "data" / "rootrecord.db"
 YELLOW = "\033[93m"
 RESET  = "\033[0m"
 
-# Initialize DB tables
+# Initialize DB
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
-        # Events table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS uptime_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +37,6 @@ def init_db():
                 uptime_seconds INTEGER DEFAULT 0
             )
         ''')
-        # Stats snapshot table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS uptime_stats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +58,7 @@ def get_all_events():
 def calculate_uptime_stats():
     events = get_all_events()
     if not events:
-        return {"total_up_sec": 0, "total_down_sec": 0, "uptime_pct": 100.0}
+        return {"total_up_sec": 0, "total_down_sec": 0, "uptime_pct": 100.000}
 
     now = datetime.utcnow()
     total_up = timedelta(0)
@@ -89,7 +87,7 @@ def calculate_uptime_stats():
         total_up += current
 
     total_time = total_up + total_down
-    pct = 100.0 if total_time.total_seconds() == 0 else (total_up / total_time * 100)
+    pct = 100.000 if total_time.total_seconds() == 0 else (total_up / total_time * 100)
 
     return {
         "total_up_sec": int(total_up.total_seconds()),
@@ -101,8 +99,7 @@ def calculate_uptime_stats():
 def print_uptime_stats(s):
     now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{YELLOW}[UPTIME] {now_str} | Total Up: {timedelta(seconds=s['total_up_sec'])} | " \
-           f"Total Down: {timedelta(seconds=s['total_down_sec'])} | " \
-           f"Uptime: {s['uptime_pct']:.3f}%{RESET}"
+           f"Total Down: {timedelta(seconds=s['total_down_sec'])} | Uptime: {s['uptime_pct']:.3f}%{RESET}"
     print(line)
 
 # Save stats snapshot to DB
