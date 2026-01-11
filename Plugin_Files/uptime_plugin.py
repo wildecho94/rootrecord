@@ -5,9 +5,8 @@
 Uptime plugin - single-file version with periodic terminal update
 
 Every 60 seconds (and once on startup):
-- Calculates total uptime and total downtime from raw DB events (start/stop/crash)
-- Computes uptime percentage as decimal ratio
-- Prints full stats in yellow to terminal
+- Calculates total uptime, total downtime, and percentage from raw DB events
+- Prints stats in yellow to terminal
 """
 
 import asyncio
@@ -52,7 +51,7 @@ def calculate_uptime_stats():
         return {
             "total_uptime": "0:00:00",
             "total_downtime": "0:00:00",
-            "uptime_pct": "100.0"
+            "uptime_pct": "100.000"
         }
 
     now = datetime.utcnow()
@@ -82,7 +81,7 @@ def calculate_uptime_stats():
         total_uptime += current
 
     total_time = total_uptime + total_downtime
-    pct = 100.0 if total_time.total_seconds() == 0 else (total_uptime / total_time * 100)
+    pct = 100.000 if total_time.total_seconds() == 0 else (total_uptime / total_time * 100)
 
     return {
         "total_uptime": str(total_uptime),
