@@ -5,6 +5,7 @@ echo Starting Rootrecord system...
 echo Press Ctrl+C to stop
 echo.
 
+:: Absolute path to rootrecord folder
 cd /d "C:\Users\Alexrs94\Desktop\programfiles\rootrecord"
 
 echo [%date% %time%] Running publish_rootrecord.py...
