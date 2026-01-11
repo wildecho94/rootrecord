@@ -11,3 +11,6 @@ venv/
 logs/
 backups/
 data/rootrecord.db
+config_telegram.json
+config_*.json
+*.json
