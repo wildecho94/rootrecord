@@ -1,4 +1,5 @@
-# RootRecord core.py # Edited Version: 1.42.20260110
+# RootRecord core.py
+# Edited Version: 1.42.20260111
 
 from pathlib import Path
 import sys
@@ -8,6 +9,7 @@ from datetime import datetime
 import sqlite3
 import importlib.util
 import time
+import asyncio
 
 BASE_DIR = Path(__file__).parent
 
@@ -26,18 +28,15 @@ DEBUG_LOG   = LOGS_FOLDER / "debug_rootrecord.log"
 DATA_FOLDER = BASE_DIR / "data"
 DATABASE    = DATA_FOLDER / "rootrecord.db"
 
-
 def ensure_logs_folder():
     LOGS_FOLDER.mkdir(exist_ok=True)
     (LOGS_FOLDER / ".keep").touch(exist_ok=True)
-
 
 def log_debug(message: str):
     ensure_logs_folder()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
         f.write(f"[{timestamp}] {message}\n")
-
 
 def clear_pycache():
     count = 0
@@ -54,10 +53,8 @@ def clear_pycache():
     if count:
         print(f"  Cleared {count} __pycache__ folder(s)")
 
-
 def ignore_zip_files(src, names):
     return [name for name in names if name.lower().endswith('.zip')]
-
 
 def make_startup_backup():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -85,7 +82,6 @@ def make_startup_backup():
 
     log_debug("Backup completed")
 
-
 def ensure_folder_and_init(folder: Path):
     folder.mkdir(exist_ok=True)
     init = folder / "__init__.py"
@@ -93,13 +89,11 @@ def ensure_folder_and_init(folder: Path):
         init.touch()
         print(f"  Created __init__.py in {folder.name}")
 
-
 def ensure_all_folders():
     print("Preparing folders...")
     for folder in FOLDERS.values():
         ensure_folder_and_init(folder)
         print(f"  ✓ {folder.name}")
-
 
 def ensure_database():
     DATA_FOLDER.mkdir(exist_ok=True)
@@ -122,7 +116,6 @@ def ensure_database():
         conn.close()
     except Exception as e:
         print(f"  Database creation failed: {e}")
-
 
 def ensure_blank_plugin_template():
     name = "blank_plugin"
@@ -158,7 +151,6 @@ print("[blank_plugin] {path.stem} loaded")
         except Exception as e:
             print(f"    Failed to create {path.name}: {e}")
 
-
 def discover_plugin_names() -> set:
     names = set()
     for path in PLUGIN_FOLDER.glob("*.py"):
@@ -170,7 +162,6 @@ def discover_plugin_names() -> set:
         names.add(stem)
     return names
 
-
 def get_plugin_status(name: str) -> list:
     parts = []
     if (PLUGIN_FOLDER / f"{name}.py").is_file():
@@ -180,7 +171,6 @@ def get_plugin_status(name: str) -> list:
     if (HANDLER_FOLDER / f"{name}_handler.py").is_file():
         parts.append("handler")
     return parts
-
 
 def print_discovery_report(plugins: set):
     if not plugins:
@@ -195,9 +185,7 @@ def print_discovery_report(plugins: set):
         print(f"  {name:18} → {status}")
     print("─" * 60)
 
-
 def auto_run_plugins(plugins: set):
-    """Auto-load and run initialize() for each discovered plugin"""
     print("\nAuto-running discovered plugins...")
     for name in sorted(plugins):
         plugin_path = PLUGIN_FOLDER / f"{name}.py"
@@ -223,7 +211,6 @@ def auto_run_plugins(plugins: set):
         except Exception as e:
             print(f"  Failed to auto-run {name}: {e}")
 
-
 def initialize_system():
     print("rootrecord system starting...\n")
 
@@ -241,13 +228,17 @@ def initialize_system():
 
     print(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
+async def main_loop():
+    while True:
+        await asyncio.sleep(60)  # Keep event loop alive, allow tasks to run
 
 if __name__ == "__main__":
     initialize_system()
     print("RootRecord is running. Press Ctrl+C to stop.\n")
+
+    # Start main asyncio loop for background tasks
     try:
-        while True:
-            time.sleep(60)  # Keep process alive, low CPU usage
+        asyncio.run(main_loop())
     except KeyboardInterrupt:
         print("\nShutting down RootRecord...")
         sys.exit(0)
