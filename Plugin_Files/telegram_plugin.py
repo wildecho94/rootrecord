@@ -30,11 +30,12 @@ logger = logging.getLogger("telegram_plugin")
 TOKEN = None
 try:
     with CONFIG_PATH.open(encoding="utf-8") as f:
-        TOKEN = json.load(f).get("token")
+        config = json.load(f)
+        TOKEN = config.get("bot_token")
     if TOKEN:
         print("[telegram_plugin] Token loaded successfully")
     else:
-        print("[telegram_plugin] Token is empty in config_telegram.json")
+        print("[telegram_plugin] bot_token is empty or missing in config_telegram.json")
 except Exception as e:
     print(f"[telegram_plugin] Failed to load config: {e}")
 
@@ -77,11 +78,14 @@ def load_commands(app: Application):
             print(f"[telegram_plugin] Failed to load {path.name}: {type(e).__name__}: {e}")
 
 async def log_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log every incoming update with full details"""
+    if update:
+        print(f"[telegram DEBUG] Received update: {update.to_dict()}")
     if update.message:
         msg = update.message
         user = msg.from_user
         chat = msg.chat
-        text = msg.text or msg.caption or "[no text]"
+        text = msg.text or msg.caption or "[no text/content]"
         prefix = "COMMAND" if text.startswith('/') else "MESSAGE"
         print(f"[telegram] {prefix} from {user.username or user.full_name} "
               f"(id:{user.id}) in {chat.type} '{chat.title or chat.username or chat.id}': {text}")
@@ -97,7 +101,7 @@ async def bot_main():
     print("[telegram_plugin] Loading commands...")
     load_commands(app)
 
-    print("[telegram_plugin] Adding global message logger...")
+    print("[telegram_plugin] Adding global message logger (all updates)...")
     app.add_handler(MessageHandler(filters.ALL, log_update))
 
     print("[telegram_plugin] Starting bot...")
@@ -107,7 +111,9 @@ async def bot_main():
     print("[telegram_plugin] Starting polling (drop pending = True)...")
     await app.updater.start_polling(
         drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES
+        allowed_updates=Update.ALL_TYPES,
+        poll_interval=0.5,      # faster polling for debugging
+        timeout=10
     )
 
     print("[telegram_plugin] Polling active – bot should now receive updates")
