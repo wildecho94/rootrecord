@@ -2,12 +2,12 @@
 # Edited Version: 1.42.20260111
 
 """
-Uptime plugin - single-file version with periodic terminal update
+Uptime plugin - single-file version with reliable periodic terminal update
 
 Every 60 seconds (and once on startup):
-- Calculates total uptime, total downtime, percentage from DB events
-- Prints stats in yellow to terminal
-- Writes snapshot to uptime_stats table every time
+- Calculates total uptime/downtime/percentage from raw DB events
+- Prints stats in yellow to console
+- Writes snapshot to uptime_stats table
 """
 
 import asyncio
@@ -102,7 +102,7 @@ def print_uptime_stats(s):
            f"Total Down: {timedelta(seconds=s['total_down_sec'])} | Uptime: {s['uptime_pct']:.3f}%{RESET}"
     print(line)
 
-# Save stats snapshot to DB
+# Save snapshot to DB
 def save_stats_to_db(s):
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
@@ -113,8 +113,9 @@ def save_stats_to_db(s):
         ''', (now, s['total_up_sec'], s['total_down_sec'], s['uptime_pct']))
         conn.commit()
 
-# Periodic update (every 60 seconds)
+# Periodic update task (every 60 seconds)
 async def periodic_uptime_update():
+    print("[uptime_plugin] Starting periodic uptime update task (every 60s)")
     while True:
         s = calculate_uptime_stats()
         print_uptime_stats(s)
@@ -159,4 +160,5 @@ atexit.register(on_exit)
 def register_commands(app: Application):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
+    # Start the periodic task
     asyncio.create_task(periodic_uptime_update())
