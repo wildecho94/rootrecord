@@ -7,9 +7,6 @@ echo.
 
 cd /d "C:\Users\Alexrs94\Desktop\programfiles\rootrecord"
 
-echo [%date% %time%] Cleaning old log...
-if exist "..\debug_rootrecord.log" del "..\debug_rootrecord.log"
-
 echo [%date% %time%] Running publish_rootrecord.py...
 python "C:\Users\Alexrs94\Desktop\programfiles\publish_rootrecord.py"
 
