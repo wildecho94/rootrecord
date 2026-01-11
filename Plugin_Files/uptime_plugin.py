@@ -2,20 +2,19 @@
 # Edited Version: 1.42.20260111
 
 """
-Uptime plugin - single-file version (for quick testing / bootstrap)
+Uptime plugin - single-file version
 
 Tracks bot uptime/downtime using JSON state + SQLite logging.
 Command: /uptime
 """
 
-import asyncio
 import json
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
 
 # Paths
 ROOT = Path(__file__).parent.parent
@@ -64,7 +63,7 @@ def save_state(last_start, last_end, total_uptime, total_downtime):
     except Exception as e:
         print(f"[uptime] State save failed: {e}")
 
-# Stats calculation
+# Stats
 def get_stats():
     state = load_state()
     now = datetime.utcnow()
@@ -81,26 +80,31 @@ def get_stats():
         "last_end": state["last_end"].isoformat() if state["last_end"] else "never"
     }
 
-# Command handler
+# Command
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = get_stats()
     text = (
         f"**Uptime Stats**\n"
-        f"• Current session: {s['current']}\n"
-        f"• Total uptime ever: {s['total_uptime']}\n"
+        f"• Current: {s['current']}\n"
+        f"• Total uptime: {s['total_uptime']}\n"
         f"• Total downtime: {s['total_downtime']}\n"
-        f"• Uptime percentage: {s['uptime_pct']}\n"
+        f"• Uptime %: {s['uptime_pct']}\n"
         f"• Last start: {s['last_start']}\n"
         f"• Last end: {s['last_end']}"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
-# Startup / shutdown hooks
+# Startup / shutdown
 last_start = datetime.utcnow()
 init_db()
-record_event("start")  # Log startup
 
-# Graceful shutdown hook (best effort)
+# Log startup
+with sqlite3.connect(DB_PATH) as conn:
+    conn.execute("INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
+                 ("start", datetime.utcnow().isoformat()))
+    conn.commit()
+
+# Graceful shutdown
 import atexit
 def on_exit():
     now = datetime.utcnow()
@@ -108,10 +112,13 @@ def on_exit():
     state = load_state()
     new_up = state["total_uptime"] + current
     save_state(state["last_start"], now, new_up, state["total_downtime"])
-    record_event("stop", int(current.total_seconds()))
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("INSERT INTO uptime_records (event_type, timestamp, uptime_seconds) VALUES (?, ?, ?)",
+                     ("stop", now.isoformat(), int(current.total_seconds())))
+        conn.commit()
 atexit.register(on_exit)
 
-# Registration (called from telegram_plugin)
+# Registration function (called from telegram_plugin)
 def register_commands(app: Application):
     app.add_handler(CommandHandler("uptime", uptime))
-    print("[uptime_plugin] /uptime command registered")
+    print("[uptime_plugin] /uptime registered")
