@@ -4,8 +4,8 @@
 """
 Uptime plugin - single-file version with reliable periodic update
 
-Refreshes and prints uptime stats every 60 seconds (and once on startup).
-No full restart needed — uses asyncio loop for clean timing.
+Calculates and prints total uptime/downtime/percentage every 60 seconds (and once on startup).
+Writes snapshot to uptime_stats table every time (separate columns).
 """
 
 import asyncio
@@ -79,6 +79,7 @@ def calculate_uptime_stats():
 
         last_time = ts
 
+    # Current session
     if in_uptime and last_time:
         current = now - last_time
         total_up += current
@@ -92,14 +93,14 @@ def calculate_uptime_stats():
         "uptime_pct": pct
     }
 
-# Print stats
+# Print stats in yellow
 def print_uptime_stats(s):
     now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     line = f"{YELLOW}[UPTIME] {now_str} | Total Up: {timedelta(seconds=s['total_up_sec'])} | " \
            f"Total Down: {timedelta(seconds=s['total_down_sec'])} | Uptime: {s['uptime_pct']:.3f}%{RESET}"
     print(line)
 
-# Save snapshot
+# Save snapshot to DB
 def save_stats_to_db(s):
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
@@ -110,7 +111,7 @@ def save_stats_to_db(s):
         ''', (now, s['total_up_sec'], s['total_down_sec'], s['uptime_pct']))
         conn.commit()
 
-# Periodic task (every 60 seconds)
+# Periodic update task (every 60 seconds)
 async def periodic_uptime_update():
     print("[uptime_plugin] Periodic uptime update task started (every 60s)")
     while True:
@@ -119,14 +120,14 @@ async def periodic_uptime_update():
         save_stats_to_db(s)
         await asyncio.sleep(60)
 
-# Command
+# Command handler
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = calculate_uptime_stats()
     text = (
         f"**Uptime Stats**\n"
-        f"• Total uptime: {timedelta(seconds=s['total_up_sec'])}\n"
+        f"• Total uptime ever: {timedelta(seconds=s['total_up_sec'])}\n"
         f"• Total downtime: {timedelta(seconds=s['total_down_sec'])}\n"
-        f"• Uptime %: {s['uptime_pct']:.3f}%"
+        f"• Uptime percentage: {s['uptime_pct']:.3f}%"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -138,7 +139,7 @@ with sqlite3.connect(DB_PATH) as conn:
                  ("start", datetime.utcnow().isoformat()))
     conn.commit()
 
-# Initial print + save
+# Initial stats print + save
 s = calculate_uptime_stats()
 print_uptime_stats(s)
 save_stats_to_db(s)
