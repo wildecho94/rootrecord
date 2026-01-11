@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes, Application
 
 # Paths
 ROOT = Path(__file__).parent.parent
@@ -43,7 +43,7 @@ def init_db():
         ''')
         conn.commit()
 
-# State
+# State management
 def load_state():
     if STATE_PATH.exists():
         try:
@@ -92,7 +92,7 @@ def get_stats():
         "total_down_str": str(state["total_downtime"])
     }
 
-# Periodic printer + DB save (every 10 seconds)
+# Periodic printer + DB save
 async def periodic_printer():
     while True:
         s = get_stats()
@@ -103,7 +103,7 @@ async def periodic_printer():
                f"Pct: {s['uptime_pct']:.1f}%{RESET}"
         print(line)
 
-        # Save every piece to DB
+        # Save every piece
         with sqlite3.connect(DB_PATH) as conn:
             conn.execute('''
                 INSERT OR REPLACE INTO uptime_stats 
@@ -124,15 +124,15 @@ async def periodic_printer():
 
         await asyncio.sleep(10)
 
-# Command
+# Command handler
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     s = get_stats()
     text = (
         f"**Uptime Stats**\n"
-        f"• Current session: {s['current_str']} ({s['current_sec']}s)\n"
-        f"• Total uptime ever: {s['total_up_str']} ({s['total_up_sec']}s)\n"
+        f"• Current: {s['current_str']} ({s['current_sec']}s)\n"
+        f"• Total uptime: {s['total_up_str']} ({s['total_up_sec']}s)\n"
         f"• Total downtime: {s['total_down_str']} ({s['total_down_sec']}s)\n"
-        f"• Uptime percentage: {s['uptime_pct']:.1f}%"
+        f"• Uptime %: {s['uptime_pct']:.1f}%"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -159,9 +159,8 @@ def on_exit():
         conn.commit()
 atexit.register(on_exit)
 
-# Registration
-def register_commands(app: Application):
+# Registration - now takes app as parameter
+def register_commands(app):
     app.add_handler(CommandHandler("uptime", uptime))
     print("[uptime_plugin] /uptime registered")
-    # Start periodic printer in background
     asyncio.create_task(periodic_printer())
