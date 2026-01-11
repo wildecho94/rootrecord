@@ -5,9 +5,9 @@
 Uptime plugin - single-file version with periodic terminal update
 
 Every 60 seconds (and once on startup):
-- Calculates total uptime, total downtime, and percentage from raw DB events
+- Calculates total uptime, total downtime, percentage from DB events
 - Prints stats in yellow to terminal
-- Writes snapshot to uptime_stats table every time (separate columns)
+- Writes snapshot to uptime_stats table every time
 """
 
 import asyncio
