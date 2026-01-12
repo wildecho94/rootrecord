@@ -1,4 +1,4 @@
-# Core_Files/gps_tracker_core.py
+# RootRecord Core_Files/gps_tracker_core.py
 # Edited Version: 1.42.20260111
 
 """
@@ -26,6 +26,7 @@ def init_db():
                 last_name TEXT,
                 message_id INTEGER,
                 timestamp TEXT NOT NULL,
+                edit_timestamp TEXT,
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
                 address TEXT,
@@ -40,11 +41,11 @@ def init_db():
         conn.commit()
 
 def process_location(update):
-    """Process full location share + user/message info, store everything, print readable line"""
-    if not update.message or not update.message.location:
+    """Process location (new or edited), store everything, print readable line"""
+    msg = update.message or update.edited_message
+    if not msg or not msg.location:
         return
 
-    msg = update.message
     user = msg.from_user
     loc = msg.location
 
@@ -53,7 +54,8 @@ def process_location(update):
     first_name = user.first_name or "[no name]"
     last_name = user.last_name or ""
     message_id = msg.message_id
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.fromtimestamp(msg.date).isoformat() if msg.date else datetime.utcnow().isoformat()
+    edit_timestamp = datetime.fromtimestamp(msg.edit_date).isoformat() if msg.edit_date else None
     latitude = loc.latitude
     longitude = loc.longitude
 
@@ -75,9 +77,10 @@ def process_location(update):
         print(f"[gps_tracker_core] Geocoding error: {e}")
 
     # Build readable one-line summary
+    edit_note = f" (edited at {edit_timestamp})" if edit_timestamp else ""
     readable = (
         f"User: {first_name} {last_name} (@{username}, id:{user_id}) | "
-        f"Msg ID: {message_id} | Time: {timestamp} | "
+        f"Msg ID: {message_id}{edit_note} | Time: {timestamp} | "
         f"Location: {latitude:.6f}, {longitude:.6f} | "
         f"Address: {address or 'N/A'} | City: {city or 'N/A'} | "
         f"Country: {country or 'N/A'} | Postal: {postal or 'N/A'} | "
@@ -89,12 +92,12 @@ def process_location(update):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
             INSERT INTO gps_records 
-            (user_id, username, first_name, last_name, message_id, timestamp,
+            (user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
              latitude, longitude, address, city, country, postal_code, neighborhood,
              raw_geopy_data, full_record_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            user_id, username, first_name, last_name, message_id, timestamp,
+            user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
             latitude, longitude, address, city, country, postal, neighborhood,
             raw_data, readable
         ))

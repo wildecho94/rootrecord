@@ -2,7 +2,7 @@
 # Edited Version: 1.42.20260111
 
 """
-GPS Tracker handler - processes shared locations from Telegram
+GPS Tracker handler - processes shared and edited locations from Telegram
 """
 
 from telegram import Update
@@ -14,5 +14,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text("Location received and stored! 📍")
 
 def register_gps_handler(app):
+    # Handle both new locations and edited locations
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
-    print("[gps_tracker] Registered location handler")
+    app.add_handler(MessageHandler(filters.LOCATION & filters.UpdateType.EDITED_MESSAGE, handle_location))
+    print("[gps_tracker] Registered location handler (new & edited)")
