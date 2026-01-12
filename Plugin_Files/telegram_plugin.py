@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 1.42.20260112 - VERBOSE + FIXED (full console visibility)
+# Version: 1.42.20260112 - VERBOSE FIXED (no recursion crash)
 
 import asyncio
 import json
@@ -21,10 +21,18 @@ from telegram.ext import (
 )
 
 # ────────────────────────────────────────────────
-# Force ALL output to console immediately
+# Force console output - SAFE VERSION (no recursion)
 # ────────────────────────────────────────────────
 sys.stdout.reconfigure(line_buffering=True)  # Force line buffering
-print = lambda *args, **kwargs: print(*args, **kwargs, flush=True)  # Auto-flush
+
+_original_print = print  # Save original
+def flushed_print(*args, **kwargs):
+    kwargs['flush'] = True
+    _original_print(*args, **kwargs)
+
+print = flushed_print
+
+print("[telegram_plugin] Print override applied - all output forced to console")
 
 # ────────────────────────────────────────────────
 # Logging - show everything in console
@@ -32,14 +40,13 @@ print = lambda *args, **kwargs: print(*args, **kwargs, flush=True)  # Auto-flush
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]  # Force to console
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("telegram_plugin")
-logging.getLogger("telegram").setLevel(logging.INFO)      # Show Telegram lib activity
-logging.getLogger("httpx").setLevel(logging.WARNING)      # Reduce httpx noise
+logging.getLogger("telegram").setLevel(logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 print("[telegram_plugin] Logging initialized - VERBOSE mode ON")
-
 # ────────────────────────────────────────────────
 # Paths & Config
 # ────────────────────────────────────────────────
