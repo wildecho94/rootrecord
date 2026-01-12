@@ -1,5 +1,5 @@
-# RootRecord Plugin_Files/gps_tracker.py
-# Edited Version: 1.42.20260111
+# Plugin_Files/gps_tracker.py
+# Edited Version: 1.42.20260112
 
 """
 GPS Tracker plugin - main entry point
