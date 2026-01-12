@@ -1,13 +1,12 @@
 # Plugin_Files/telegram_plugin.py
-# Edited Version: 1.42.20260111
+# Edited Version: 1.42.20260112
 
 """
-Telegram plugin - main entry point with global logging
+Telegram plugin - main entry point with global app exposure
 """
 
 import asyncio
 import json
-import importlib.util
 from pathlib import Path
 from threading import Thread
 import logging
@@ -19,6 +18,9 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+# Global app instance for other plugins to access
+app = None
 
 ROOT = Path(__file__).parent.parent
 COMMANDS_DIR = ROOT / "commands"
@@ -62,7 +64,7 @@ handler = CommandHandler("start", start)
 ''', encoding='utf-8')
         logger.info("Created commands/start_cmd.py")
 
-def load_commands(app: Application):
+def load_commands(application: Application):
     bootstrap_commands()
     for path in sorted(COMMANDS_DIR.glob("*_cmd.py")):
         if path.name.startswith("__"): continue
@@ -73,7 +75,7 @@ def load_commands(app: Application):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             if hasattr(module, "handler"):
-                app.add_handler(module.handler)
+                application.add_handler(module.handler)
                 logger.info(f"Loaded command /{cmd_name}")
             else:
                 logger.warning(f"{path.name} has no 'handler'")
@@ -90,6 +92,7 @@ async def log_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         logger.info(f"{prefix} from {user.username or user.full_name} (id:{user.id}) in {chat.type} '{chat.title or chat.username or chat.id}': {text}")
 
 async def bot_main():
+    global app
     if not TOKEN:
         logger.warning("No valid token → exiting")
         return
