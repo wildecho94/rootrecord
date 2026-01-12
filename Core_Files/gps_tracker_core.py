@@ -1,9 +1,9 @@
-# RootRecord Core_Files/gps_tracker_core.py
+# Core_Files/gps_tracker_core.py
 # Edited Version: 1.42.20260111
 
 """
-GPS Tracker core logic - geocoding & database storage
-Stores every piece of received/derived data in readable format.
+GPS Tracker core logic - geocoding & full data storage
+Stores every piece of data received/derived, prints readable one-line summary.
 """
 
 import sqlite3
@@ -24,6 +24,7 @@ def init_db():
                 username TEXT,
                 first_name TEXT,
                 last_name TEXT,
+                message_id INTEGER,
                 timestamp TEXT NOT NULL,
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
@@ -38,8 +39,8 @@ def init_db():
         ''')
         conn.commit()
 
-def process_location(update: Update):
-    """Process full location share + user info, store everything, print readable line"""
+def process_location(update):
+    """Process full location share + user/message info, store everything, print readable line"""
     if not update.message or not update.message.location:
         return
 
@@ -51,6 +52,7 @@ def process_location(update: Update):
     username = user.username or "[no username]"
     first_name = user.first_name or "[no name]"
     last_name = user.last_name or ""
+    message_id = msg.message_id
     timestamp = datetime.utcnow().isoformat()
     latitude = loc.latitude
     longitude = loc.longitude
@@ -75,11 +77,11 @@ def process_location(update: Update):
     # Build readable one-line summary
     readable = (
         f"User: {first_name} {last_name} (@{username}, id:{user_id}) | "
-        f"Time: {timestamp} | "
+        f"Msg ID: {message_id} | Time: {timestamp} | "
         f"Location: {latitude:.6f}, {longitude:.6f} | "
-        f"Address: {address or 'N/A'} | "
-        f"City: {city or 'N/A'} | Country: {country or 'N/A'} | "
-        f"Postal: {postal or 'N/A'} | Neighborhood: {neighborhood or 'N/A'}"
+        f"Address: {address or 'N/A'} | City: {city or 'N/A'} | "
+        f"Country: {country or 'N/A'} | Postal: {postal or 'N/A'} | "
+        f"Neighborhood: {neighborhood or 'N/A'}"
     )
     print(readable)
 
@@ -87,12 +89,14 @@ def process_location(update: Update):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
             INSERT INTO gps_records 
-            (user_id, username, first_name, last_name, timestamp, latitude, longitude,
-             address, city, country, postal_code, neighborhood, raw_geopy_data, full_record_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, username, first_name, last_name, message_id, timestamp,
+             latitude, longitude, address, city, country, postal_code, neighborhood,
+             raw_geopy_data, full_record_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            user_id, username, first_name, last_name, timestamp, latitude, longitude,
-            address, city, country, postal, neighborhood, raw_data, readable
+            user_id, username, first_name, last_name, message_id, timestamp,
+            latitude, longitude, address, city, country, postal, neighborhood,
+            raw_data, readable
         ))
         conn.commit()
 
