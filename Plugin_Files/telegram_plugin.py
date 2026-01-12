@@ -121,13 +121,12 @@ async def bot_main():
 
     logger.info("Polling active – bot should now receive updates")
 
-    # Trigger late registration for GPS plugin after polling has started
     try:
-    from Plugin_Files.a_gps_plugin import late_register
-        late_register(app)                          # ← FIXED: pass app here
+        from Plugin_Files.a_gps_plugin import late_register   # ← updated name
+        late_register(app)
         logger.info("Late GPS plugin registration completed")
     except ImportError:
-        logger.info("gps_plugin not present - skipping late registration")
+        logger.info("GPS plugin not found - skipping late registration")
     except Exception as e:
         logger.error(f"Late GPS registration failed: {e}")
 
