@@ -10,5 +10,7 @@ from Handler_Files.gps_tracker_handler import register_gps_handler
 
 def initialize():
     init_db()
-    register_gps_handler()
+    # Access global app from telegram_plugin (assuming exposed as global 'app')
+    from Plugin_Files.telegram_plugin import app as telegram_app
+    register_gps_handler(telegram_app)
     print("[gps_tracker] Initialized and ready to track shared/edited locations")
