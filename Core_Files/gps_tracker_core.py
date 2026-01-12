@@ -1,6 +1,6 @@
 # Core_Files/gps_tracker_core.py
 # Part of RootRecord GPS Tracker Plugin
-# Version: 1.42.20260112
+# Version: 1.42.20260112 (edited with process_location)
 
 """
 Core database functions for GPS tracking
@@ -8,10 +8,10 @@ Handles initialization and saving location records
 """
 
 import sqlite3
-import os
 from pathlib import Path
 import logging
 from datetime import datetime
+from typing import Optional
 
 # Setup logging
 logging.basicConfig(
@@ -77,28 +77,30 @@ def init_db():
 
 def save_gps_record(
     user_id: int,
-    username: str = None,
-    first_name: str = None,
-    last_name: str = None,
-    chat_id: int = None,
-    message_id: int = None,
-    latitude: float = None,
-    longitude: float = None,
-    accuracy: float = None,
-    heading: float = None,
-    speed: float = None,
-    altitude: float = None,
-    live_period: int = None,
-    timestamp: str = None
-):
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    chat_id: Optional[int] = None,
+    message_id: Optional[int] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    accuracy: Optional[float] = None,
+    heading: Optional[float] = None,
+    speed: Optional[float] = None,
+    altitude: Optional[float] = None,
+    live_period: Optional[int] = None,
+    timestamp: Optional[str] = None
+) -> bool:
     """
     Save a GPS location record to the database.
-    All parameters are optional except user_id, latitude, longitude, timestamp.
     Returns True if saved successfully, False otherwise.
     """
-    if latitude is None or longitude is None or timestamp is None:
-        logger.warning("Missing required fields (lat, lon, timestamp) - record not saved")
+    if latitude is None or longitude is None:
+        logger.warning("Missing latitude or longitude - record not saved")
         return False
+
+    if timestamp is None:
+        timestamp = datetime.utcnow().isoformat()
 
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -131,13 +133,35 @@ def save_gps_record(
         if 'conn' in locals():
             conn.close()
 
-# Optional: function to get recent records (for debugging)
-def get_recent_records(limit=10):
+def process_location(user_id, username, latitude, longitude, accuracy=None, heading=None, **kwargs):
+    """
+    Compatibility function expected by gps_tracker_handler.py
+    Forwards the data to save_gps_record()
+    """
+    timestamp = kwargs.get('timestamp') or datetime.utcnow().isoformat()
+    
+    success = save_gps_record(
+        user_id=user_id,
+        username=username,
+        latitude=latitude,
+        longitude=longitude,
+        accuracy=accuracy,
+        heading=heading,
+        timestamp=timestamp,
+        **kwargs  # pass any extra fields like first_name, chat_id, etc.
+    )
+    
+    return success
+
+# Optional: for debugging
+def get_recent_records(limit=5):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM gps_records ORDER BY received_at DESC LIMIT ?", (limit,))
         rows = cursor.fetchall()
+        for row in rows:
+            print(row)
         return rows
     except sqlite3.Error as e:
         logger.error(f"Failed to fetch recent records: {e}")
