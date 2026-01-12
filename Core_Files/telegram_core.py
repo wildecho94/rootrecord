@@ -1,105 +1,249 @@
-# Core_Files/telegram_core.py
-"""
-Telegram plugin core — bot startup, polling, handler registration
-"""
+# Plugin_Files/telegram_core.py
+# Combined Telegram bot + GPS location saving + callback handler
+# Version: 1.42.20260112 (final merged core with callback support)
 
-print("[telegram] core loaded")
-
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from telegram import Update
-from Plugin_Files.telegram import load_config, register_user
+import asyncio
+import json
+import importlib.util
 import logging
+from pathlib import Path
+from threading import Thread
 from datetime import datetime
 
-# Import handlers from the handler file
-from Handler_Files.telegram_handler import button_callback  # ← Uncommented & active
-
-# Setup logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+from telegram import Update
+from telegram.ext import (
+    Application,
+    ContextTypes,
+    MessageHandler,
+    filters,
+    CommandHandler,
+    CallbackQueryHandler,
 )
-logger = logging.getLogger(__name__)
 
-# Global application instance (accessible for future plugins to add handlers)
-application = None
+# ────────────────────────────────────────────────
+# Logging setup
+# ────────────────────────────────────────────────
 
+logging.basicConfig(
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    level=logging.DEBUG
+)
+logger = logging.getLogger("telegram_core")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ────────────────────────────────────────────────
+# Paths & Config
+# ────────────────────────────────────────────────
+
+ROOT = Path(__file__).parent.parent
+COMMANDS_DIR = ROOT / "commands"
+CONFIG_PATH = ROOT / "config_telegram.json"
+DATA_DIR = ROOT / "data"
+DB_PATH = DATA_DIR / "rootrecord.db"
+
+# ────────────────────────────────────────────────
+# Database (embedded)
+# ────────────────────────────────────────────────
+
+import sqlite3
+
+def init_db():
+    DATA_DIR.mkdir(exist_ok=True)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gps_records (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         INTEGER NOT NULL,
+                username        TEXT,
+                first_name      TEXT,
+                last_name       TEXT,
+                chat_id         INTEGER NOT NULL,
+                message_id      INTEGER,
+                latitude        REAL NOT NULL,
+                longitude       REAL NOT NULL,
+                accuracy        REAL,
+                heading         REAL,
+                speed           REAL,
+                altitude        REAL,
+                live_period     INTEGER,
+                timestamp       TEXT NOT NULL,
+                received_at     TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(message_id, user_id) ON CONFLICT IGNORE
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_timestamp ON gps_records (user_id, timestamp)')
+        conn.commit()
+        logger.info(f"Database ready at: {DB_PATH}")
+        print(f"[telegram_core] DB initialized at {DB_PATH}")
+    except sqlite3.Error as e:
+        logger.error(f"DB init failed: {e}")
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+def save_gps_record(update: Update):
+    msg = update.message or update.edited_message
+    if not msg or not msg.location:
+        return False
+
+    loc = msg.location
+    user = msg.from_user
+    timestamp = datetime.utcnow().isoformat()
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO gps_records (
+                user_id, username, first_name, last_name,
+                chat_id, message_id,
+                latitude, longitude, accuracy, heading,
+                live_period, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            user.id, user.username, user.first_name, user.last_name,
+            msg.chat.id, msg.message_id,
+            loc.latitude, loc.longitude, loc.horizontal_accuracy, loc.heading,
+            msg.live_period if hasattr(msg, 'live_period') else None,
+            timestamp
+        ))
+        conn.commit()
+        logger.info(f"Saved GPS for user {user.id} → ({loc.latitude}, {loc.longitude})")
+        print(f"[telegram_core] Saved location for {user.username or user.id}")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Save failed: {e}")
+        return False
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+# ────────────────────────────────────────────────
+# Command loading
+# ────────────────────────────────────────────────
+
+def load_commands(application: Application):
+    COMMANDS_DIR.mkdir(exist_ok=True)
+
+    start_file = COMMANDS_DIR / "start_cmd.py"
+    if not COMMANDS_DIR.glob("*_cmd.py"):
+        start_file.write_text('''\
+from telegram import Update
+from telegram.ext import CommandHandler, ContextTypes
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    register_user(user.id, user.username, user.first_name, user.last_name)
     await update.message.reply_text(
-        f"Hello {user.first_name or 'user'}! Bot is now active.\n"
-        "Use /help for commands."
+        f"Hello {user.first_name}! 👋\\n"
+        "GPS tracking active. Send a location or live location to record it."
     )
 
+handler = CommandHandler("start", start)
+''', encoding='utf-8')
+        logger.info("Created default commands/start_cmd.py")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "/start — Start the bot\n"
-        "/help — This message\n"
-        "/status — Show current config status"
-    )
+    for path in sorted(COMMANDS_DIR.glob("*_cmd.py")):
+        if path.name.startswith("__"): continue
+        cmd_name = path.stem.replace("_cmd", "")
+        try:
+            spec = importlib.util.spec_from_file_location(f"commands.{path.stem}", path)
+            if not spec: continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            if hasattr(module, "handler"):
+                application.add_handler(module.handler)
+                logger.info(f"Loaded command /{cmd_name}")
+            else:
+                logger.warning(f"{path.name} has no 'handler'")
+        except Exception as e:
+            logger.error(f"Failed to load {path.name}: {type(e).__name__}: {e}")
 
+# ────────────────────────────────────────────────
+# Handlers
+# ────────────────────────────────────────────────
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    config = load_config()
-    enabled = [k for k, v in config["connections"].items() if v["enabled"]]
-    await update.message.reply_text(
-        f"Bot enabled: {config['enabled']}\n"
-        f"Connections: {', '.join(enabled) or 'none'}\n"
-        f"Token set: {'yes' if not config['bot_token'].startswith('YOUR_') else 'no'}"
-    )
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    saved = save_gps_record(update)
+    if saved:
+        # Optional: reply
+        # await update.message.reply_text("Location saved!")
+        pass
 
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Processes inline button clicks (moved from telegram_handler.py)
+    """
+    query = update.callback_query
+    await query.answer()  # Acknowledge
+    data = query.data
+    await query.message.reply_text(f"You clicked button: {data}")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Callback received: {data} from user {query.from_user.id}")
 
-async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Log every text message"""
-    msg = update.effective_message
-    user = update.effective_user
-    chat = update.effective_chat
+# ────────────────────────────────────────────────
+# Main bot startup
+# ────────────────────────────────────────────────
 
-    log_line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {user.username or user.id} in {chat.type} ({chat.id}): {msg.text or '[non-text]'}"
-    print(log_line)
+TOKEN = None
+try:
+    with CONFIG_PATH.open(encoding="utf-8") as f:
+        config = json.load(f)
+        TOKEN = config.get("bot_token")
+    if TOKEN:
+        logger.info("Token loaded successfully")
+    else:
+        logger.warning("bot_token missing in config_telegram.json")
+except Exception as e:
+    logger.error(f"Failed to load config: {e}")
 
-    log_file = BASE_DIR / "logs" / "telegram.log"
-    log_file.parent.mkdir(exist_ok=True)
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(log_line + "\n")
-
-
-def start_bot():
-    global application
-
-    config = load_config()
-    if not config["enabled"] or config["bot_token"].startswith("YOUR_"):
-        print("[telegram] Bot disabled or no token — skipping startup")
+async def bot_main():
+    if not TOKEN:
+        logger.warning("No valid token → exiting")
         return
 
-    print("[telegram] Starting Telegram bot polling...")
+    logger.info("Starting Telegram core with GPS + callbacks...")
+    application = Application.builder().token(TOKEN).build()
 
-    application = Application.builder().token(config["bot_token"]).build()
+    # Load commands
+    load_commands(application)
 
-    # Basic commands
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("status", status))
+    # Location handler
+    application.add_handler(MessageHandler(
+        filters.LOCATION | filters.LIVE_LOCATION,
+        handle_location
+    ))
 
-    # Log all text messages
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_message))
-
-    # Register advanced handlers from telegram_handler.py
+    # Inline button callback handler (from old telegram_handler.py)
     application.add_handler(CallbackQueryHandler(button_callback))
 
-    # Start polling
-    application.run_polling(
+    # Global message logger (optional)
+    async def log_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.message:
+            msg = update.message
+            text = msg.text or msg.caption or "[no text]"
+            prefix = "COMMAND" if text.startswith('/') else "MESSAGE"
+            logger.info(f"{prefix} from {msg.from_user.username or msg.from_user.id}: {text}")
+    application.add_handler(MessageHandler(filters.ALL, log_message))
+
+    logger.info("Initializing application...")
+    await application.initialize()
+    await application.start()
+
+    logger.info("Starting polling (drop pending = True)...")
+    await application.updater.start_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES,
-        poll_interval=0.5
+        poll_interval=0.5,
+        timeout=10
     )
 
+    logger.info("Polling active – GPS tracking & callbacks ready")
+    await asyncio.Event().wait()
 
 def initialize():
-    start_bot()
-
-
-if __name__ == "__main__":
-    initialize()
+    init_db()
+    if TOKEN:
+        logger.info("Launching Telegram core in background...")
+        Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
+    else:
+        logger.warning("No token – Telegram disabled")
