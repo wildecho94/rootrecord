@@ -14,7 +14,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text("Location received and stored! 📍")
 
 def register_gps_handler(app):
-    # Handle both new locations and edited locations
+    # Handle both new locations and edited locations with location
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
     app.add_handler(MessageHandler(filters.LOCATION & filters.UpdateType.EDITED_MESSAGE, handle_location))
     print("[gps_tracker] Registered location handler (new & edited)")

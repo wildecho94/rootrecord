@@ -1,9 +1,9 @@
 # RootRecord Core_Files/gps_tracker_core.py
-# Edited Version: 1.42.20260111
+# Edited Version: 1.42.20260112
 
 """
 GPS Tracker core logic - geocoding & full data storage
-Stores every piece of data received/derived, prints readable one-line summary.
+Stores every piece of data received/derived (including edits), prints readable one-line summary.
 """
 
 import sqlite3
@@ -24,11 +24,13 @@ def init_db():
                 username TEXT,
                 first_name TEXT,
                 last_name TEXT,
-                message_id INTEGER,
-                timestamp TEXT NOT NULL,
+                message_id INTEGER NOT NULL,
+                original_timestamp TEXT NOT NULL,
                 edit_timestamp TEXT,
                 latitude REAL NOT NULL,
                 longitude REAL NOT NULL,
+                heading REAL,
+                horizontal_accuracy REAL,
                 address TEXT,
                 city TEXT,
                 country TEXT,
@@ -41,7 +43,7 @@ def init_db():
         conn.commit()
 
 def process_location(update):
-    """Process location (new or edited), store everything, print readable line"""
+    """Process location (new or edited), store all fields, print readable line"""
     msg = update.message or update.edited_message
     if not msg or not msg.location:
         return
@@ -54,10 +56,12 @@ def process_location(update):
     first_name = user.first_name or "[no name]"
     last_name = user.last_name or ""
     message_id = msg.message_id
-    timestamp = datetime.fromtimestamp(msg.date).isoformat() if msg.date else datetime.utcnow().isoformat()
+    original_timestamp = datetime.fromtimestamp(msg.date).isoformat() if msg.date else datetime.utcnow().isoformat()
     edit_timestamp = datetime.fromtimestamp(msg.edit_date).isoformat() if msg.edit_date else None
     latitude = loc.latitude
     longitude = loc.longitude
+    heading = loc.heading if hasattr(loc, 'heading') else None
+    horizontal_accuracy = loc.horizontal_accuracy if hasattr(loc, 'horizontal_accuracy') else None
 
     address = city = country = postal = neighborhood = raw_data = None
 
@@ -78,10 +82,12 @@ def process_location(update):
 
     # Build readable one-line summary
     edit_note = f" (edited at {edit_timestamp})" if edit_timestamp else ""
+    heading_note = f" | Heading: {heading}°" if heading else ""
+    accuracy_note = f" | Acc: ±{horizontal_accuracy}m" if horizontal_accuracy else ""
     readable = (
         f"User: {first_name} {last_name} (@{username}, id:{user_id}) | "
-        f"Msg ID: {message_id}{edit_note} | Time: {timestamp} | "
-        f"Location: {latitude:.6f}, {longitude:.6f} | "
+        f"Msg ID: {message_id}{edit_note} | Time: {original_timestamp} | "
+        f"Location: {latitude:.6f}, {longitude:.6f}{heading_note}{accuracy_note} | "
         f"Address: {address or 'N/A'} | City: {city or 'N/A'} | "
         f"Country: {country or 'N/A'} | Postal: {postal or 'N/A'} | "
         f"Neighborhood: {neighborhood or 'N/A'}"
@@ -92,13 +98,15 @@ def process_location(update):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
             INSERT INTO gps_records 
-            (user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
-             latitude, longitude, address, city, country, postal_code, neighborhood,
+            (user_id, username, first_name, last_name, message_id, original_timestamp, edit_timestamp,
+             latitude, longitude, heading, horizontal_accuracy,
+             address, city, country, postal_code, neighborhood,
              raw_geopy_data, full_record_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
-            latitude, longitude, address, city, country, postal, neighborhood,
+            user_id, username, first_name, last_name, message_id, original_timestamp, edit_timestamp,
+            latitude, longitude, heading, horizontal_accuracy,
+            address, city, country, postal, neighborhood,
             raw_data, readable
         ))
         conn.commit()
