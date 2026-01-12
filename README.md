@@ -1,11 +1,7 @@
-# RootRecord
+# RootRecord v1.42.20260111
 
-**Modular Python plugin system with auto-maintained templates**  
-Version: v1.42.20260111
-
-RootRecord is a lightweight, extensible framework designed for rapid development of modular Python applications with plugin architecture.
-
-Current status: **very early development / proof-of-concept stage** (January 11, 2026)
+**First official release**  
+Modular Python plugin system with auto-maintained templates and Telegram integration
 
 ## Current Features
 
@@ -23,20 +19,34 @@ Current status: **very early development / proof-of-concept stage** (January 11,
   - Skips `.zip` files
   - Backs up core/handler/plugin files + `data/` folder (including database)
 
-- **Telegram plugin** (basic working version)
+- **Telegram plugin** (working version)
   - Loads from `Plugin_Files/telegram_plugin.py`
   - Uses `config_telegram.json` for bot token
-  - Dynamic command loading from top-level `commands/` folder
-  - Auto-creates `start_cmd.py` if missing
-  - Real-time terminal logging of all incoming messages/commands (teal color)
+  - Dynamic command loading from `commands/` folder
+  - Auto-creates `/start` command if missing
+  - Real-time terminal logging of all incoming messages/commands
   - Background polling via daemon thread
+
+- **Uptime plugin** (reliable tracking)
+  - Tracks total uptime/downtime from raw DB events (start/stop/crash)
+  - Prints yellow stats to console every 60 seconds + on startup
+  - Saves snapshots to `uptime_stats` table (timestamp, up/down sec, percentage)
+  - Uses separate daemon thread for consistent timing
 
 - **GitHub publishing script** (`publish_rootrecord.py`)
   - Auto-commits & pushes changes on every startup
-  - Appends recent log excerpt to commit output
-  - Safe handling of existing repo
+  - Includes recent log excerpt
 
 - **Debug logging**
-  - All important startup events written to `debug_rootrecord.log`
+  - All console output mirrored to `debug_rootrecord.log`
 
-## Project Structure (as of Jan 2026)
+## Changelog (v1.42.20260111 - First Release)
+
+- Stabilized plugin loading & discovery
+- Telegram bot fully functional with /start command and real-time message logging
+- Added reliable uptime tracking with daemon thread (no asyncio starvation)
+- All console output now mirrored to debug_rootrecord.log
+- Improved backup system (skips .zip, logs every step)
+- Cleaned sensitive files from history (config_telegram.json removed)
+
+## Project Structure
