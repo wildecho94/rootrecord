@@ -27,11 +27,12 @@ LIGHT_BLUE = "\033[94m"
 RESET = "\033[0m"
 
 def tg_print(*args, **kwargs):
-    """Print in light blue for Telegram-related messages"""
+    """Print in light blue + force flush for Telegram-related messages"""
     print(LIGHT_BLUE + " ".join(map(str, args)) + RESET, flush=True, **kwargs)
 
-# Override print for this file (only affects tg_print calls)
-print = tg_print  # Now all prints in this file are light blue
+# Override print for this file to use light blue
+_original_print = print
+print = tg_print
 
 print("Print override applied – all output in light blue")
 
@@ -253,7 +254,7 @@ async def bot_main():
         handle_location
     ))
 
-    # Explicitly catch edited live locations (some versions need this)
+    # Explicitly catch edited live locations
     application.add_handler(MessageHandler(
         filters.UpdateType.EDITED_MESSAGE & filters.LOCATION,
         handle_location
