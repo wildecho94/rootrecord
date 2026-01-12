@@ -1,11 +1,15 @@
-# RootRecord
+**RootRecord**
 
 **Modular Python plugin system with auto-maintained templates**
 
-**Version:** v1.43.20260112  
-**Status:** Early development / active bootstrapping (January 12, 2026)
+**Version:** 20260112 ("Merged & Visible")  
+**Last edited:** January 12, 2026  
+**Status:** Early/active development
 
 RootRecord is a lightweight, extensible framework for building modular Python applications — especially bots and automation tools — using a clean plugin-based architecture.
+
+**Status:** Early development / active bootstrapping (January 12, 2026)
+
 
 ### Key Improvements (Jan 12, 2026)
 
