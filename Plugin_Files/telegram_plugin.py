@@ -106,13 +106,13 @@ async def bot_main():
     logger.info("Adding global message logger (all updates)...")
     app.add_handler(MessageHandler(filters.ALL, log_update))
 
-    # NEW: Late registration for GPS tracker after app is ready
+    # NEW: Trigger late registration for GPS plugin after app is ready
     try:
-        from Plugin_Files.gps_tracker import late_register
+        from Plugin_Files.gps_plugin import late_register
         late_register()
-        logger.info("Called late registration for GPS tracker")
+        logger.info("Late GPS plugin registration completed")
     except ImportError:
-        logger.info("gps_tracker not present - skipping late registration")
+        logger.info("gps_plugin not present - skipping late registration")
     except Exception as e:
         logger.error(f"Late GPS registration failed: {e}")
 
