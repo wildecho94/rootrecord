@@ -1,4 +1,4 @@
-# Plugin_Files/gps_tracker.py
+# RootRecord Plugin_Files/gps_tracker.py
 # Edited Version: 1.42.20260112
 
 """

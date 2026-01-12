@@ -42,7 +42,7 @@ def init_db():
             )
         ''')
         conn.commit()
-        print(f"[gps_tracker_core] DB table gps_records ready at {DB_PATH}")
+        print(f"[gps_tracker_core] DB table gps_records ready at {DB_PATH.absolute()}")
 
 def process_location(update):
     """Process location (new or edited), save EVERYTHING, print readable line."""
@@ -124,6 +124,6 @@ def process_location(update):
         fallback_path = Path(__file__).parent.parent / "logs" / "gps_fallback.log"
         with open(fallback_path, "a", encoding="utf-8") as f:
             f.write(f"{readable}\n")
-        print(f"[gps_tracker_core] Emergency fallback saved to {fallback_path}")
+        print(f"[gps_tracker_core] Emergency fallback saved to {fallback_path.absolute()}")
 
     print("[gps_tracker_core] Location processing complete")
