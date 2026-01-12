@@ -1,52 +1,98 @@
-# RootRecord v1.42.20260111
+# RootRecord
 
-**First official release**  
-Modular Python plugin system with auto-maintained templates and Telegram integration
+**Modular Python plugin system with auto-maintained templates**  
+Version: v1.42.20260111  
+Status: Early development / active bootstrapping (January 11, 2026)
 
-## Current Features
+RootRecord is a lightweight, extensible framework designed for building modular Python applications, especially bots and automation tools, using a plugin-based architecture.
 
-- **Plugin system** (auto-discovery & loading)
-  - Plugins live in `Plugin_Files/`
-  - Recognizes `{plugin_name}.py`, `{plugin_name}_core.py`, `{plugin_name}_handler.py`, `{plugin_name}_main.py`
-  - Automatic execution of `initialize()` function if present
+### Current Features (as of Jan 11, 2026)
 
-- **Folder structure auto-preparation**
-  - Creates / checks `Core_Files/`, `Handler_Files/`, `Plugin_Files/`
-  - Clears `__pycache__` folders on startup
+- **Automatic folder & file preparation**
+  - Creates `Core_Files/`, `Handler_Files/`, `Plugin_Files/` with `__init__.py`
+  - Generates blank plugin template if missing
 
-- **Startup backup system**
-  - Creates timestamped backups in `backups/`
-  - Skips `.zip` files
-  - Backs up core/handler/plugin files + `data/` folder (including database)
+- **Startup safety features**
+  - Clears `__pycache__` folders
+  - Creates timestamped backups (skips `.zip` files)
+  - Logs everything to `debug_rootrecord.log` (console mirrored)
 
-- **Telegram plugin** (working version)
-  - Loads from `Plugin_Files/telegram_plugin.py`
-  - Uses `config_telegram.json` for bot token
-  - Dynamic command loading from `commands/` folder
-  - Auto-creates `/start` command if missing
-  - Real-time terminal logging of all incoming messages/commands
-  - Background polling via daemon thread
+- **Plugin auto-discovery & loading**
+  - Detects plugins in `Plugin_Files/*.py`
+  - Supports single-file or split (main / core / handler) plugins
+  - Calls `initialize()` if present
 
-- **Uptime plugin** (reliable tracking)
-  - Tracks total uptime/downtime from raw DB events (start/stop/crash)
-  - Prints yellow stats to console every 60 seconds + on startup
-  - Saves snapshots to `uptime_stats` table (timestamp, up/down sec, percentage)
-  - Uses separate daemon thread for consistent timing
+- **Telegram integration** (working bot)
+  - Loads token from `config_telegram.json`
+  - Auto-creates `/start` command
+  - Real-time logging of all incoming messages/commands
+  - Background polling with drop pending updates
 
-- **GitHub publishing script** (`publish_rootrecord.py`)
-  - Auto-commits & pushes changes on every startup
-  - Includes recent log excerpt
+- **Uptime plugin** (single-file)
+  - Tracks total uptime/downtime from `start`/`stop`/`crash` events
+  - Calculates percentage ratio from raw database events
+  - Prints yellow stats every 60 seconds + on startup
+  - Saves snapshots to `uptime_stats` table
 
-- **Debug logging**
-  - All console output mirrored to `debug_rootrecord.log`
+- **GitHub auto-publish** (`publish_rootrecord.py`)
+  - Commits & pushes changes on startup
+  - Handles deleted/moved files (`git add -u`)
 
-## Changelog (v1.42.20260111 - First Release)
+- **Centralized asyncio loop**
+  - Reliable background tasks without starvation
+  - All console output logged & mirrored
 
-- Stabilized plugin loading & discovery
-- Telegram bot fully functional with /start command and real-time message logging
-- Added reliable uptime tracking with daemon thread (no asyncio starvation)
-- All console output now mirrored to debug_rootrecord.log
-- Improved backup system (skips .zip, logs every step)
-- Cleaned sensitive files from history (config_telegram.json removed)
+Changelog
+v1.42.20260111 (Jan 11, 2026)
 
-## Project Structure
+Added Core_Files/scheduler.py for centralized periodic task management
+All console output now mirrored & saved to debug_rootrecord.log
+Uptime plugin: reliable 60-second stats print + DB snapshot
+Telegram: detailed logging of config, commands, polling, updates
+Core: asyncio main loop for stable background tasks
+
+v1.42.20260110 (previous)
+
+Initial bootstrap with folder prep, backups, plugin discovery
+Telegram plugin with /start command & message logging
+Basic uptime plugin with DB & JSON state
+GitHub auto-publish with deleted file handling
+
+Earlier versions (pre-20260110)
+
+Project initialization
+SQLite database setup
+Backup system with zip skip
+Blank plugin template generator
+
+Goals & Roadmap (2026)
+Short-term
+
+Stabilize uptime & telegram plugins
+Add crash detection & recovery logging
+Implement proper shutdown hooks
+Expose scheduler to all plugins
+
+Medium-term
+
+Plugin hot-reload support
+Command prefix & argument parsing
+User/session tracking in DB
+Multi-platform support (Discord?)
+
+Long-term vision
+
+Self-healing framework
+Plugin marketplace
+AI agent integration
+Enterprise-grade logging & monitoring
+
+Security Notes
+
+Never commitconfig_telegram.json or any secrets
+publish_rootrecord.py contains GitHub token → delete after use
+Regenerate Telegram token if ever exposed
+
+Contributing
+Early stage project — breaking changes expected.
+Focus: stability > features
