@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 1.42.20260112 - VERBOSE FIXED (no recursion crash)
+# Version: 20260112 – Merged Telegram + GPS, verbose logging, immediate DB saves, live edits fixed
 
 import asyncio
 import json
@@ -47,6 +47,7 @@ logging.getLogger("telegram").setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 print("[telegram_plugin] Logging initialized - VERBOSE mode ON")
+
 # ────────────────────────────────────────────────
 # Paths & Config
 # ────────────────────────────────────────────────
@@ -105,15 +106,16 @@ def init_db():
 def save_gps_record(update: Update):
     msg = update.message or update.edited_message
     if not msg or not msg.location:
-        print("[telegram_plugin] No location in update - skipping save")
+        print("[telegram_plugin] No location in message/edited_message - skipping save")
         return False
 
     loc = msg.location
     user = msg.from_user
     timestamp = datetime.utcnow().isoformat()
+    live_period = msg.live_period if hasattr(msg, 'live_period') else None
 
     print(f"[telegram_plugin] Saving location for user {user.id} ({user.username or 'no username'}): "
-          f"({loc.latitude}, {loc.longitude}) @ {timestamp}")
+          f"({loc.latitude}, {loc.longitude}) @ {timestamp} | Live period: {live_period}s")
 
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -129,8 +131,7 @@ def save_gps_record(update: Update):
             user.id, user.username, user.first_name, user.last_name,
             msg.chat.id, msg.message_id,
             loc.latitude, loc.longitude, loc.horizontal_accuracy, loc.heading,
-            msg.live_period if hasattr(msg, 'live_period') else None,
-            timestamp
+            live_period, timestamp
         ))
         conn.commit()
         print(f"[telegram_plugin] SUCCESS: Saved GPS record for user {user.id}")
@@ -191,7 +192,12 @@ handler = CommandHandler("start", start)
 # ────────────────────────────────────────────────
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("[telegram_plugin] Location update received")
+    print("[telegram_plugin] Location handler triggered")
+    if update.edited_message:
+        print("[telegram_plugin] → This is an EDITED message (live location update)")
+    else:
+        print("[telegram_plugin] → This is a NEW message")
+    
     saved = save_gps_record(update)
     if saved:
         print("[telegram_plugin] Location saved successfully")
@@ -240,11 +246,17 @@ async def bot_main():
     print("[telegram_plugin] Loading commands...")
     load_commands(application)
 
-    print("[telegram_plugin] Adding location handler...")
+    print("[telegram_plugin] Adding location handler (for both new & edited messages)...")
     application.add_handler(MessageHandler(
-    filters.LOCATION,  # This catches both regular locations and live locations
-    handle_location
-))
+        filters.LOCATION,
+        handle_location
+    ))
+
+    # Explicitly catch edited live locations
+    application.add_handler(MessageHandler(
+        filters.UpdateType.EDITED_MESSAGE & filters.LOCATION,
+        handle_location
+    ))
 
     print("[telegram_plugin] Adding callback query handler...")
     application.add_handler(CallbackQueryHandler(button_callback))
