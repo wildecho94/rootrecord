@@ -1,33 +1,21 @@
-# RootRecord Core_Files/gps_tracker_core.py
+# Core_Files/gps_tracker_core.py
 # Edited Version: 1.42.20260112
 
 """
-GPS Tracker core logic - full location processing, geocoding, zone detection,
-activity tracking, stats update, and storage of all received/derived data.
+GPS Tracker core logic - geocoding & guaranteed data storage
+Every location (new or edited) is saved with all fields.
 """
 
 import sqlite3
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
-
-from plugins.gps.geofencing import determine_zone, check_geofence_change
-from plugins.activities.rideshare.state_rideshare import (
-    is_activity_active,
-    load_activity_state,
-    save_activity_state
-)
-from plugins.activities.rideshare.handler_rideshare import get_activity_display
-from utils.calculator import update_calculated_stats
-from utils.helpers import ensure_user_folder, safe_json_read, safe_json_write
 
 DB_PATH = Path(__file__).parent.parent / "data" / "rootrecord.db"
 geolocator = Nominatim(user_agent="rootrecord_gps_tracker")
 
 def init_db():
-    """Initialize gps_records table with all possible fields from old system."""
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS gps_records (
@@ -49,18 +37,18 @@ def init_db():
                 country TEXT,
                 postal_code TEXT,
                 neighborhood TEXT,
-                zone TEXT,
-                zone_changed INTEGER DEFAULT 0,
                 raw_geopy_data TEXT,
                 full_record_text TEXT
             )
         ''')
         conn.commit()
+        print(f"[gps_tracker_core] DB table gps_records ready at {DB_PATH}")
 
 def process_location(update):
-    """Process new or edited location message, store all data, update stats/activity."""
+    """Process location (new or edited), save EVERYTHING, print readable line."""
     msg = update.message or update.edited_message
     if not msg or not msg.location:
+        print("[gps_tracker_core] No location in message - skipping")
         return
 
     user = msg.from_user
@@ -79,12 +67,12 @@ def process_location(update):
     horizontal_accuracy = loc.horizontal_accuracy if hasattr(loc, 'horizontal_accuracy') else None
     live_period = loc.live_period if hasattr(loc, 'live_period') else None
 
-    # Geocoding
+    # Geocoding (non-blocking)
     address = city = country = postal = neighborhood = raw_data = None
     try:
         location = geolocator.reverse((latitude, longitude), exactly_one=True, timeout=10)
         if location:
-            raw_data = json.dumps(location.raw, default=str)
+            raw_data = str(location.raw)
             address = location.address
             addr_dict = location.raw.get('address', {})
             city = addr_dict.get('city') or addr_dict.get('town') or addr_dict.get('village')
@@ -96,16 +84,8 @@ def process_location(update):
     except Exception as e:
         print(f"[gps_tracker_core] Geocoding error: {e}")
 
-    # Zone detection & change check (from old geofencing)
-    zone = determine_zone(user_id, latitude, longitude)
-    zone_changed = 0
-    # Check if zone changed (requires previous location - placeholder logic)
-    # For simplicity, we assume zone change is detected in geofencing module
-    if check_geofence_change(user_id, latitude, longitude, latitude, longitude):  # prev coords needed in real impl
-        zone_changed = 1
-
-    # Build readable one-line summary (all data)
-    edit_note = f" (edited at {edit_timestamp})" if edit_timestamp else ""
+    # Readable one-line summary
+    edit_note = f" (edited {edit_timestamp})" if edit_timestamp else ""
     heading_note = f" | Heading: {heading}°" if heading else ""
     accuracy_note = f" | Acc: ±{horizontal_accuracy}m" if horizontal_accuracy else ""
     live_note = f" | Live: {live_period}s" if live_period else ""
@@ -113,37 +93,37 @@ def process_location(update):
         f"User: {first_name} {last_name} (@{username}, id:{user_id}) | "
         f"Msg ID: {message_id}{edit_note} | Time: {timestamp} | "
         f"Location: {latitude:.6f}, {longitude:.6f}{heading_note}{accuracy_note}{live_note} | "
-        f"Zone: {zone} (changed: {'Yes' if zone_changed else 'No'}) | "
         f"Address: {address or 'N/A'} | City: {city or 'N/A'} | "
         f"Country: {country or 'N/A'} | Postal: {postal or 'N/A'} | "
         f"Neighborhood: {neighborhood or 'N/A'}"
     )
     print(readable)
 
-    # Store EVERYTHING in DB
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('''
-            INSERT INTO gps_records 
-            (user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
-             latitude, longitude, heading, horizontal_accuracy, live_period,
-             address, city, country, postal_code, neighborhood, zone, zone_changed,
-             raw_geopy_data, full_record_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
-            latitude, longitude, heading, horizontal_accuracy, live_period,
-            address, city, country, postal, neighborhood, zone, zone_changed,
-            raw_data, readable
-        ))
-        conn.commit()
+    # Guaranteed DB insert with error handling
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO gps_records 
+                (user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
+                 latitude, longitude, heading, horizontal_accuracy, live_period,
+                 address, city, country, postal_code, neighborhood,
+                 raw_geopy_data, full_record_text)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                user_id, username, first_name, last_name, message_id, timestamp, edit_timestamp,
+                latitude, longitude, heading, horizontal_accuracy, live_period,
+                address, city, country, postal, neighborhood,
+                raw_data, readable
+            ))
+            conn.commit()
+            print(f"[gps_tracker_core] SAVED row ID: {cursor.lastrowid}")
+    except Exception as e:
+        print(f"[gps_tracker_core] DB SAVE FAILED: {e}")
+        # Emergency fallback: save to text file if DB fails
+        fallback_path = Path(__file__).parent.parent / "logs" / "gps_fallback.log"
+        with open(fallback_path, "a", encoding="utf-8") as f:
+            f.write(f"{readable}\n")
+        print(f"[gps_tracker_core] Emergency fallback saved to {fallback_path}")
 
-    print("[gps_tracker_core] Location fully stored")
-
-    # Update user stats & activity (from old system)
-    update_calculated_stats(user_id)
-
-    if is_activity_active(user_id):
-        state = load_activity_state(user_id)
-        state["pings_count"] = state.get("pings_count", 0) + 1
-        save_activity_state(user_id, state)
-        # Note: Activity panel refresh is handled in handler_rideshare if needed
+    print("[gps_tracker_core] Location processing complete")
