@@ -242,9 +242,9 @@ async def bot_main():
 
     print("[telegram_plugin] Adding location handler...")
     application.add_handler(MessageHandler(
-        filters.LOCATION | filters.LIVE_LOCATION,
-        handle_location
-    ))
+    filters.LOCATION,  # This catches both regular locations and live locations
+    handle_location
+))
 
     print("[telegram_plugin] Adding callback query handler...")
     application.add_handler(CallbackQueryHandler(button_callback))
