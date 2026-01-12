@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Edited Version: 1.42.20260112
+# Edited Version: 1.42.20260112 (fixed)
 
 """
 Telegram plugin - main entry point with global app exposure
@@ -7,6 +7,7 @@ Telegram plugin - main entry point with global app exposure
 
 import asyncio
 import json
+import importlib.util                # ← ADDED THIS
 from pathlib import Path
 from threading import Thread
 import logging
@@ -106,16 +107,6 @@ async def bot_main():
     logger.info("Adding global message logger (all updates)...")
     app.add_handler(MessageHandler(filters.ALL, log_update))
 
-    # NEW: Trigger late registration for GPS plugin after app is ready
-    try:
-        from Plugin_Files.gps_plugin import late_register
-        late_register()
-        logger.info("Late GPS plugin registration completed")
-    except ImportError:
-        logger.info("gps_plugin not present - skipping late registration")
-    except Exception as e:
-        logger.error(f"Late GPS registration failed: {e}")
-
     logger.info("Starting bot...")
     await app.initialize()
     await app.start()
@@ -129,6 +120,18 @@ async def bot_main():
     )
 
     logger.info("Polling active – bot should now receive updates")
+
+    # NEW: Trigger late registration for GPS plugin *after* polling has started
+    try:
+        from Plugin_Files.gps_plugin import late_register
+        late_register()
+        logger.info("Late GPS plugin registration completed")
+    except ImportError:
+        logger.info("gps_plugin not present - skipping late registration")
+    except Exception as e:
+        logger.error(f"Late GPS registration failed: {e}")
+
+    # Keep the event loop alive
     await asyncio.Event().wait()
 
 def initialize():
