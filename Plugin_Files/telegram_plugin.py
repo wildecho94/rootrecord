@@ -216,11 +216,24 @@ def register_new_plugins(application: Application):
         application.add_handler(CommandHandler("finance", finance))
         print("[telegram_plugin] /finance registered")
     except ImportError as e:
-        print(f"[telegram_plugin] Finance plugin not found: {e}")
+        print(f"[telegram_plugin] Finance plugin import failed: {e}")
+    except Exception as e:
+        print(f"[telegram_plugin] Finance plugin registration error: {e}")
 
-    # Vehicles plugin (full suite)
+    # Vehicles plugin (full suite) – split to avoid one missing function killing everything
     try:
-        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg, callback_vehicle_menu, callback_fill, handle_fillup_input
+        from Plugin_Files.vehicles_plugin import (
+            cmd_vehicle_add,
+            cmd_vehicles,
+            cmd_fillup,
+            cmd_mpg,
+            callback_vehicle_menu,
+            callback_fill,
+            handle_fillup_input
+        )
+        print("[telegram_plugin] Vehicles functions imported successfully")
+
+        # Register handlers one by one
         application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))
         application.add_handler(CommandHandler("vehicles", cmd_vehicles))
         application.add_handler(CommandHandler("fillup", cmd_fillup))
@@ -228,11 +241,15 @@ def register_new_plugins(application: Application):
         application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
         application.add_handler(CallbackQueryHandler(callback_fill, pattern="^veh_fill_"))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_fillup_input))
-        print("[telegram_plugin] Vehicles commands + buttons registered")
-    except ImportError as e:
-        print(f"[telegram_plugin] Vehicles plugin not found: {e}")
 
-    # Geopy is auto-called from handle_location (no command needed)
+        print("[telegram_plugin] Vehicles commands + buttons registered (all handlers added)")
+    except ImportError as e:
+        print(f"[telegram_plugin] Vehicles import failed: {e}")
+        print("    → Check that vehicles_plugin.py contains: cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg, callback_vehicle_menu, callback_fill, handle_fillup_input")
+    except Exception as e:
+        print(f"[telegram_plugin] Vehicles registration error: {e}")
+
+    # Geopy is auto-called from handle_location (no extra registration needed)
 
 # ────────────────────────────────────────────────
 # Main bot startup
@@ -266,6 +283,7 @@ async def bot_main():
     print("[telegram_plugin] Adding location handler (new + edited messages)...")
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_location))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_fillup_input))
 
     print("[telegram_plugin] Adding global message logger...")
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, log_all))
