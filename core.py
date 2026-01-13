@@ -60,4 +60,94 @@ def backup_system():
             shutil.copytree(folder, dest, ignore=shutil.ignore_patterns("*.zip"))
             log_debug(f"Backed up {name} (skipped .zip files)")
 
-    data_dest = backup_dir / "data
+    data_dest = backup_dir / "data"
+    shutil.copytree(DATA_FOLDER, data_dest, ignore=shutil.ignore_patterns("*.zip"))
+    log_debug(f"Backed up data folder (database + skipped .zip)")
+
+    log_debug("Backup completed")
+
+def prepare_folders():
+    for name, folder in FOLDERS.items():
+        if not folder.exists():
+            folder.mkdir(parents=True)
+            log_debug(f"Created {name} folder")
+        else:
+            log_debug(f"✓ {name.capitalize()}_Files")
+
+def discover_plugins():
+    plugins = {}
+    log_debug("\nDiscovered potential plugin(s):")
+
+    for path in sorted(PLUGIN_FOLDER.glob("*_plugin.py")):
+        if path.name.startswith("__"):
+            continue
+
+        name = path.stem
+        try:
+            spec = importlib.util.spec_from_file_location(f"plugins.{name}", path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            entry_points = []
+            if hasattr(module, "main"):
+                entry_points.append("main")
+            if hasattr(module, "core"):
+                entry_points.append("core")
+            if hasattr(module, "handler"):
+                entry_points.append("handler")
+            if entry_points:
+                plugins[name] = module
+                log_debug(f"{name} → {', '.join(entry_points)}")
+        except Exception as e:
+            log_debug(f"Failed to discover {path.name}: {e}")
+
+    log_debug(f"────────────────────────────────────────────────────────────\n")
+
+    return plugins
+
+def auto_run_plugins(plugins):
+    for name, module in plugins.items():
+        try:
+            if hasattr(module, "initialize"):
+                module.initialize()
+            log_debug(f"→ {name} initialized")
+        except Exception as e:
+            log_debug(f"Failed to auto-run {name}: {e}")
+
+def initialize_system():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    now = datetime.now()
+    log_debug(f"rootrecord system starting at {now.isoformat()}...")
+
+    clear_pycache_folders()
+    backup_system()
+    prepare_folders()
+
+    plugins = discover_plugins()
+    auto_run_plugins(plugins)
+
+    log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
+
+async def main_loop():
+    log_debug("[core] Main asyncio loop running - all background tasks active")
+    while True:
+        await asyncio.sleep(60)  # Keep loop alive
+
+if __name__ == "__main__":
+    initialize_system()
+    log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
+
+    # Start Cloudflare Tunnel (optional - comment out if not needed)
+    try:
+        from plugins.web.tunnel import initialize as tunnel_init
+        tunnel_init()
+        log_debug("[core] Cloudflare Tunnel initialized and started")
+    except ImportError as e:
+        log_debug(f"[core] Failed to import tunnel.py: {e}")
+    except Exception as e:
+        log_debug(f"[core] Tunnel startup error: {e}")
+
+    try:
+        asyncio.run(main_loop())
+    except KeyboardInterrupt:
+        log_debug("\nShutting down RootRecord...")
+        sys.exit(0)
