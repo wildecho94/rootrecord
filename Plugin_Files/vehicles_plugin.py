@@ -132,7 +132,9 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "MPG Stats:\n"
     for row in results:
         plate, year, make, model, avg_mpg, last_mpg = row
-        text += f"{year} {make} {model} ({plate}): Last MPG {last_mpg:.1f if last_mpg else 'N/A'}, Avg {avg_mpg:.1f if avg_mpg else 'N/A'}\n"
+        last_str = f"{last_mpg:.1f}" if last_mpg is not None else "N/A"
+        avg_str = f"{avg_mpg:.1f}" if avg_mpg is not None else "N/A"
+        text += f"{year} {make} {model} ({plate}): Last MPG {last_str}, Avg {avg_str}\n"
 
     await update.message.reply_text(text)
 

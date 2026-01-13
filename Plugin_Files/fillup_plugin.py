@@ -44,7 +44,6 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         odometer = int(args[2])
         is_full = True
 
-    # Store for confirmation
     context.user_data["fillup_data"] = {
         "gallons": gallons,
         "price": price,
@@ -52,7 +51,6 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         "is_full": is_full
     }
 
-    # Get user's vehicles
     user_id = update.effective_user.id
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -61,7 +59,7 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if not vehicles:
         await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
-        del context.user_data["fillup_data"]
+        context.user_data.pop("fillup_data", None)
         return
 
     keyboard = []
