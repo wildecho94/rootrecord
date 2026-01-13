@@ -149,7 +149,7 @@ async def callback_fill(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Send a new clean message asking for fill-up details
     await query.message.reply_text(
-        f"Selected vehicle: {vehicle_id}\n\n"
+        f"Selected vehicle ID {vehicle_id}\n\n"
         "Enter fill-up details:\n"
         "gallons price [station] [notes] [--full]\n\n"
         "Example: 12.5 45.67 Shell --full\n"
@@ -211,7 +211,7 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     if "fillup_pending_full" in context.user_data:
         del context.user_data["fillup_pending_full"]
 
-    reply = f"Fill-up logged for vehicle {vehicle_id}. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
+    reply = f"Fill-up logged. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
     await update.message.reply_text(reply)
 
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):

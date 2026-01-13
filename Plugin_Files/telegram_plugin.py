@@ -92,7 +92,6 @@ def save_gps_record(update: Update):
     loc = msg.location
     user = msg.from_user
 
-    # Use already-parsed datetime objects directly
     if update.edited_message and msg.edit_date:
         ping_time = msg.edit_date.isoformat()
         ping_type = "EDIT (live ping)"
@@ -216,10 +215,13 @@ def register_new_plugins(application: Application):
         application.add_handler(CommandHandler("finance", finance))
         print("[telegram_plugin] /finance registered")
     except ImportError as e:
-        print(f"[telegram_plugin] Finance plugin not found: {e}")
+        print(f"[telegram_plugin] Finance plugin import failed: {e}")
+    except Exception as e:
+        print(f"[telegram_plugin] Finance registration error: {e}")
 
     # Vehicles plugin (full suite)
     try:
+        print("[telegram_plugin] Importing vehicles_plugin functions...")
         from Plugin_Files.vehicles_plugin import (
             cmd_vehicle_add,
             cmd_vehicles,
@@ -229,18 +231,34 @@ def register_new_plugins(application: Application):
             callback_fill,
             handle_fillup_input
         )
-        print("[telegram_plugin] Vehicles functions imported successfully")
+        print("[telegram_plugin] All vehicles functions imported OK")
 
+        # Register handlers one by one
         application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))
+        print("[vehicles] Registered /vehicle")
+
         application.add_handler(CommandHandler("vehicles", cmd_vehicles))
+        print("[vehicles] Registered /vehicles")
+
         application.add_handler(CommandHandler("fillup", cmd_fillup))
+        print("[vehicles] Registered /fillup")
+
         application.add_handler(CommandHandler("mpg", cmd_mpg))
+        print("[vehicles] Registered /mpg")
+
         application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
+        print("[vehicles] Registered callback_vehicle_menu")
+
         application.add_handler(CallbackQueryHandler(callback_fill, pattern="^veh_fill_"))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_fillup_input))
-        print("[telegram_plugin] Vehicles commands + buttons registered")
+        print("[vehicles] Registered callback_fill")
+
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_fillup_input))
+        print("[vehicles] Registered handle_fillup_input (private chats)")
+
+        print("[telegram_plugin] Vehicles commands + buttons registered (all handlers added)")
     except ImportError as e:
-        print(f"[telegram_plugin] Vehicles plugin not found: {e}")
+        print(f"[telegram_plugin] Vehicles import failed: {e}")
+        print("Missing functions in vehicles_plugin.py: cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg, callback_vehicle_menu, callback_fill, handle_fillup_input")
     except Exception as e:
         print(f"[telegram_plugin] Vehicles registration error: {e}")
 
