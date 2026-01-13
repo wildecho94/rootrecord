@@ -61,31 +61,39 @@ def add_vehicle(user_id: int, plate: str, year: int, make: str, model: str, odom
 async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
-    if len(args) < 5:
+
+    # Debug: show exactly what Telegram sent
+    print(f"[DEBUG cmd_vehicle_add] Raw input: '{update.message.text}'")
+    print(f"[DEBUG cmd_vehicle_add] Split args: {args}")
+
+    if len(args) < 4:
         await update.message.reply_text(
-            "Exact format required:\n"
+            "Exact format:\n"
             "/vehicle add <Plate> <Year> <Make> <Model> <Odometer>\n\n"
             "Example:\n"
             "/vehicle add WZP484 2014 Chevy Cruze 60675\n"
-            "(Make and Model can be one or two words, Odometer must be last)"
+            "Make/Model can be multiple words. Odometer must be last."
         )
         return
 
     plate = args[0].upper()
-    try:
-        year = int(args[1])
-        odometer = int(args[-1])  # always take last arg as odometer
-    except ValueError:
-        await update.message.reply_text("Year (2nd) and Odometer (last) must be numbers.\nCheck for extra spaces or typos.")
-        return
 
-    # Make = 3rd arg, Model = everything between year and odometer
-    make = args[2]
-    model_parts = args[3:-1]  # all between make and odometer
-    model = ' '.join(model_parts) if model_parts else "Unknown"
+    # Find year and odometer by looking for numbers
+    year = None
+    odometer = None
+    make_model_parts = []
 
-    add_vehicle(user_id, plate, year, make, model, odometer)
-    await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
+    for arg in args[1:]:
+        try:
+            num = int(arg.strip())  # strip any whitespace
+            if year is None:
+                year = num
+            else:
+                odometer = num
+        except ValueError:
+            make_model_parts.append(arg)
+
+    if year is None or odometer is None
 
 async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
