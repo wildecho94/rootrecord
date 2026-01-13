@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260113 – Fixed syntax + registered finance, geopy, vehicles plugins
+# Version: 20260113 – Fixed syntax + full registration of finance, geopy, vehicles plugins
 
 import asyncio
 import json
