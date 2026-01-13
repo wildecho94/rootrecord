@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260113 – Fixed syntax + full registration of finance, geopy, vehicles plugins
+# Version: 20260113 – Fixed syntax + registered finance, geopy, vehicles plugins
 
 import asyncio
 import json
@@ -220,9 +220,9 @@ def register_new_plugins(application: Application):
 
     # Vehicles plugin (full suite)
     try:
-        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg
-        application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))  # /vehicle add ...
-        application.add_handler(CommandHandler("vehicles", cmd_vehicles))    # button menu
+        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg, callback_vehicle_menu, callback_fill, handle_fillup_input
+        application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))
+        application.add_handler(CommandHandler("vehicles", cmd_vehicles))
         application.add_handler(CommandHandler("fillup", cmd_fillup))
         application.add_handler(CommandHandler("mpg", cmd_mpg))
         application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
