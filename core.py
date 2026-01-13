@@ -79,7 +79,8 @@ def discover_plugins():
     plugins = {}
     log_debug("\nDiscovered potential plugin(s):")
 
-    for path in sorted(PLUGIN_FOLDER.glob("*_plugin.py")):
+    # Use rglob to find recursively (in case plugins are in subfolders like web/)
+    for path in PLUGIN_FOLDER.rglob("*_plugin.py"):
         if path.name.startswith("__"):
             continue
 
@@ -139,7 +140,7 @@ if __name__ == "__main__":
 
     # Start Cloudflare Tunnel
     try:
-        from plugins.web.tunnel import initialize as tunnel_init
+        from Plugin_Files.web.tunnel import initialize as tunnel_init
         tunnel_init()
         log_debug("[core] Cloudflare Tunnel initialized and started")
     except ImportError as e:
