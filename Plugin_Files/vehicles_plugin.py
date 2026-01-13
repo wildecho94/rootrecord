@@ -136,12 +136,15 @@ async def callback_fill(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
     if not data.startswith("veh_fill_"):
+        print(f"[DEBUG] Invalid callback data: {data}")
         return
 
     vehicle_id = int(data.split("_")[-1])
     context.user_data["fillup_vehicle_id"] = vehicle_id
+    print(f"[DEBUG] Fill-up callback: vehicle_id={vehicle_id}, user_id={update.effective_user.id}")
 
     await query.edit_message_text(
+        f"Selected vehicle ID {vehicle_id}\n\n"
         "Enter fill-up details:\n"
         "gallons price [station] [notes] [--full]\n"
         "Odometer required only for full tanks"
@@ -149,13 +152,15 @@ async def callback_fill(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "fillup_vehicle_id" not in context.user_data:
+        print("[DEBUG] No fillup_vehicle_id in context — ignoring text message")
         return
 
     user_id = update.effective_user.id
     vehicle_id = context.user_data["fillup_vehicle_id"]
     text = update.message.text.strip()
-    args = text.split()
+    print(f"[DEBUG] Fill-up input: user={user_id}, vehicle={vehicle_id}, text='{text}'")
 
+    args = text.split()
     if len(args) < 2:
         await update.message.reply_text("Format: gallons price [station] [notes] [--full]")
         return
@@ -188,7 +193,6 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (vehicle_id, user_id, odometer, gallons, price, station, notes, fill_date, 1 if is_full else 0))
 
-        # Auto-log as expense
         description = f"Fuel fill-up: {gallons} gal @ ${price or 0:.2f}"
         c.execute('''
             INSERT INTO finance_records (type, amount, description, vehicle_id, timestamp)
@@ -201,9 +205,9 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     if "fillup_pending_full" in context.user_data:
         del context.user_data["fillup_pending_full"]
 
-    reply = f"Fill-up logged. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
+    reply = f"Fill-up logged for vehicle {vehicle_id}. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
     await update.message.reply_text(reply)
-
+    
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
