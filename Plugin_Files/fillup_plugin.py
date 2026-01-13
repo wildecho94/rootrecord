@@ -12,7 +12,6 @@ DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def initialize():
     print("[fillup_plugin] Initialized – /fillup ready")
-    # No DB init needed — uses existing tables from vehicles & finance plugins
 
 async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -23,7 +22,7 @@ async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Examples:\n"
         "12.5 45.67 Shell --full 65000\n"
         "13.0 50.00 --full\n"
-        "10.2 38.90 --full\n\n"
+        "10.2 38.90\n\n"
         "Reply with your input."
     )
 
@@ -51,8 +50,8 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     odometer = None
 
     while i < len(args):
-        arg = args[i].lower()
-        if arg == "--full":
+        arg = args[i]
+        if arg.lower() == "--full":
             is_full = True
             i += 1
         elif arg.isdigit() and is_full:
@@ -60,10 +59,10 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
             i += 1
             break
         elif station is None:
-            station = args[i]
+            station = arg
             i += 1
         else:
-            notes_parts.append(args[i])
+            notes_parts.append(arg)
             i += 1
 
     notes = ' '.join(notes_parts) if notes_parts else None
