@@ -1,16 +1,6 @@
 # Plugin_Files/vehicles_plugin.py
 # Version: 20260113 – Multi-vehicle, button menu, MPG on full tank, /mpg command
 
-"""
-Vehicles plugin – manage multiple vehicles, log fill-ups, calculate MPG
-- /vehicle add <Plate> <Year> <Make> <Model> <Odometer> (initial baseline)
-- /vehicles → shows button menu (list, add, fillup, mpg)
-- /fillup → button select vehicle → input fill details
-- MPG only calculated on full tank fill-ups with odometer
-- Partial fill-ups logged but ignored for MPG until enclosed
-- /mpg → per-vehicle last MPG + running average
-"""
-
 import sqlite3
 from datetime import datetime
 from pathlib import Path
