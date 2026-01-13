@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260113 – Registered finance, geopy, vehicles plugins + auto-enrichment
+# Version: 20260113 – Fixed syntax error + registered finance, geopy, vehicles plugins
 
 import asyncio
 import json
@@ -195,4 +195,101 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             from Plugin_Files.geopy_plugin import enrich_ping
             enrich_ping(ping_id, loc.latitude, loc.longitude, orig_time)
     else:
-        print("
+        print("[telegram_plugin] Location save failed")
+
+async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message:
+        msg = update.message
+        text = msg.text or msg.caption or "[no text]"
+        prefix = "COMMAND" if text.startswith('/') else "MESSAGE"
+        user = msg.from_user
+        print(f"[telegram_plugin] {prefix} from {user.username or user.id} (id:{user.id}): {text}")
+
+# ────────────────────────────────────────────────
+# Register new plugins' commands & hooks
+# ────────────────────────────────────────────────
+def register_new_plugins(application: Application):
+    print("[telegram_plugin] Registering new plugins...")
+
+    # Finance plugin
+    try:
+        from Plugin_Files.finance_plugin import finance
+        application.add_handler(CommandHandler("finance", finance))
+        print("[telegram_plugin] /finance registered")
+    except ImportError as e:
+        print(f"[telegram_plugin] Finance plugin not found: {e}")
+
+    # Vehicles plugin
+    try:
+        from Plugin_Files.vehicles_plugin import cmd_addvehicle, cmd_fillup
+        application.add_handler(CommandHandler("addvehicle", cmd_addvehicle))
+        application.add_handler(CommandHandler("fillup", cmd_fillup))
+        print("[telegram_plugin] /addvehicle and /fillup registered")
+    except ImportError as e:
+        print(f"[telegram_plugin] Vehicles plugin not found: {e}")
+
+    # Geopy is auto-called from handle_location (no extra command)
+
+# ────────────────────────────────────────────────
+# Main bot startup
+# ────────────────────────────────────────────────
+TOKEN = None
+try:
+    with CONFIG_PATH.open(encoding="utf-8") as f:
+        config = json.load(f)
+        TOKEN = config.get("bot_token")
+    if TOKEN:
+        print("[telegram_plugin] Token loaded successfully")
+    else:
+        print("[telegram_plugin] WARNING: bot_token missing in config_telegram.json")
+except Exception as e:
+    print(f"[telegram_plugin] Config load failed: {e}")
+
+async def bot_main():
+    if not TOKEN:
+        print("[telegram_plugin] No valid token → exiting")
+        return
+
+    print("[telegram_plugin] Starting bot...")
+    application = Application.builder().token(TOKEN).build()
+
+    print("[telegram_plugin] Loading commands...")
+    load_commands(application)
+
+    print("[telegram_plugin] Registering new plugins...")
+    register_new_plugins(application)
+
+    print("[telegram_plugin] Adding location handler (new + edited messages)...")
+    application.add_handler(MessageHandler(filters.LOCATION, handle_location))
+    application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_location))
+
+    print("[telegram_plugin] Adding global message logger...")
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, log_all))
+
+    print("[telegram_plugin] Initializing application...")
+    await application.initialize()
+    print("[telegram_plugin] Application initialized")
+
+    print("[telegram_plugin] Starting bot...")
+    await application.start()
+    print("[telegram_plugin] Bot started")
+
+    print("[telegram_plugin] Starting polling...")
+    await application.updater.start_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        poll_interval=0.5,
+        timeout=10
+    )
+    print("[telegram_plugin] Polling active – full activity should now be visible")
+
+    await asyncio.Event().wait()
+
+def initialize():
+    print("[telegram_plugin] initialize() called")
+    init_db()
+    if TOKEN:
+        print("[telegram_plugin] Launching bot in background thread...")
+        Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
+    else:
+        print("[telegram_plugin] No token – bot disabled")
