@@ -61,29 +61,24 @@ def add_vehicle(user_id: int, plate: str, year: int, make: str, model: str, odom
 async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
-    if len(args) < 4:
-        await update.message.reply_text(
-            "Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>\n"
-            "Example: /vehicle add WZP484 2014 Chevy Cruze 60675"
-        )
+    if len(args) < 5:
+        await update.message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
         return
 
-    plate = args[0].upper()
+    plate = args[0]
     try:
         year = int(args[1])
-        odometer = int(args[-1])  # Last argument is always odometer
+        odometer = int(args[4])
     except ValueError:
-        await update.message.reply_text("Year and Odometer must be numbers. Check your input.")
+        await update.message.reply_text("Year and Odometer must be numbers.")
         return
 
-    # Make and Model = all middle arguments (handles spaces/multi-word models)
-    make_model = ' '.join(args[2:-1])
-    make_model_parts = make_model.split(maxsplit=1)
-    make = make_model_parts[0] if make_model_parts else "Unknown"
-    model = make_model_parts[1] if len(make_model_parts) > 1 else "Unknown"
+    make = args[2]
+    model = args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
     await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
+
 async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
