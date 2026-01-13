@@ -1,0 +1,12 @@
+
+tunnel: 9394a9cb-b14a-4f0d-9da9-290fbcaf487b
+credentials-file: ./9394a9cb-b14a-4f0d-9da9-290fbcaf487b.json   # relative to /web/
+
+ingress:
+  - hostname: dashboard.rootrecord.info
+    service: http://localhost:5000
+  - hostname: www.rootrecord.info
+    service: http://localhost:5000
+  - hostname: rootrecord.info
+    service: http://localhost:5000
+  - service: http_status:404
