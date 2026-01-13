@@ -1,5 +1,5 @@
 # Plugin_Files/fillup_plugin.py
-# Version: 20260113 – Simple fill-up: gallons + price + optional odometer
+# Simple fill-up: gallons + price + optional odometer → confirm vehicle → save
 
 import sqlite3
 from datetime import datetime
@@ -15,16 +15,15 @@ def initialize():
 
 async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Enter fill-up details (simple):\n"
+        "Enter fill-up:\n"
         "gallons price [odometer if full tank]\n\n"
         "Examples:\n"
-        "12.5 45.67 65000     ← full tank with odometer\n"
-        "10.2 38.90          ← partial fill-up (no odometer)\n\n"
-        "Reply with your input."
+        "12.5 45.67 65000    ← full tank\n"
+        "10.2 38.90          ← partial\n\n"
+        "Reply with your numbers."
     )
 
 async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     text = update.message.text.strip()
     args = text.split()
 
@@ -43,9 +42,9 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     is_full = False
     if len(args) > 2 and args[2].isdigit():
         odometer = int(args[2])
-        is_full = True  # If odometer given, assume full tank
+        is_full = True
 
-    # Store parsed data
+    # Store for confirmation
     context.user_data["fillup_data"] = {
         "gallons": gallons,
         "price": price,
@@ -53,7 +52,8 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         "is_full": is_full
     }
 
-    # Show confirmation buttons with user's vehicles
+    # Get user's vehicles
+    user_id = update.effective_user.id
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("SELECT vehicle_id, plate, year, make, model FROM vehicles WHERE user_id=?", (user_id,))
@@ -73,7 +73,7 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="fillup_cancel")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Which vehicle was this fill-up for?", reply_markup=reply_markup)
+    await update.message.reply_text("Which vehicle?", reply_markup=reply_markup)
 
 async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -81,21 +81,19 @@ async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_
 
     data = query.data
     if data == "fillup_cancel":
-        await query.edit_message_text("Fill-up cancelled.")
-        if "fillup_data" in context.user_data:
-            del context.user_data["fillup_data"]
+        await query.edit_message_text("Cancelled.")
+        context.user_data.pop("fillup_data", None)
         return
 
     if not data.startswith("fillup_confirm_"):
         return
 
     vehicle_id = int(data.split("_")[-1])
-
-    if "fillup_data" not in context.user_data:
+    fillup_data = context.user_data.get("fillup_data")
+    if not fillup_data:
         await query.edit_message_text("Session expired. Try /fillup again.")
         return
 
-    fillup_data = context.user_data["fillup_data"]
     gallons = fillup_data["gallons"]
     price = fillup_data["price"]
     odometer = fillup_data["odometer"]
@@ -109,7 +107,6 @@ async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (vehicle_id, update.effective_user.id, odometer, gallons, price, fill_date, 1 if is_full else 0))
 
-        # Auto-log as expense (no station/notes in this simple version)
         description = f"Fuel fill-up: {gallons} gal @ ${price:.2f}"
         c.execute('''
             INSERT INTO finance_records (type, amount, description, vehicle_id, timestamp)
@@ -118,13 +115,13 @@ async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_
 
         conn.commit()
 
-    del context.user_data["fillup_data"]
+    context.user_data.pop("fillup_data", None)
 
-    reply = f"Fill-up logged for vehicle {vehicle_id}. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
+    reply = f"Fill-up logged. {'Full tank' if is_full else 'Partial'}."
     await query.edit_message_text(reply)
 
 def register(app: Application):
     app.add_handler(CommandHandler("fillup", cmd_fillup))
     app.add_handler(CallbackQueryHandler(callback_fillup_confirm, pattern="^fillup_confirm_|^fillup_cancel"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_fillup_input))
-    print("[fillup_plugin] /fillup + handlers registered")
+    print("[fillup_plugin] Registered")
