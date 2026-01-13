@@ -1,5 +1,5 @@
 # Plugin_Files/fillup_plugin.py
-# Version: 20260113 – Isolated fill-up logging + finance integration
+# Version: 20260113 – Simple fill-up: gallons + price + optional odometer
 
 import sqlite3
 from datetime import datetime
@@ -14,15 +14,12 @@ def initialize():
     print("[fillup_plugin] Initialized – /fillup ready")
 
 async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
     await update.message.reply_text(
-        "Enter fill-up details in this format:\n"
-        "gallons price [station] [notes] [--full] [odometer (if full)]\n\n"
+        "Enter fill-up details (simple):\n"
+        "gallons price [odometer if full tank]\n\n"
         "Examples:\n"
-        "12.5 45.67 Shell --full 65000\n"
-        "13.0 50.00 --full\n"
-        "10.2 38.90\n\n"
+        "12.5 45.67 65000     ← full tank with odometer\n"
+        "10.2 38.90          ← partial fill-up (no odometer)\n\n"
         "Reply with your input."
     )
 
@@ -32,7 +29,7 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     args = text.split()
 
     if len(args) < 2:
-        await update.message.reply_text("Invalid format. Use: gallons price [station] [notes] [--full] [odometer (if full)]")
+        await update.message.reply_text("Need at least gallons and price.")
         return
 
     try:
@@ -42,46 +39,21 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Gallons and price must be numbers.")
         return
 
-    # Parse optional fields
-    i = 2
-    station = None
-    notes_parts = []
-    is_full = False
     odometer = None
+    is_full = False
+    if len(args) > 2 and args[2].isdigit():
+        odometer = int(args[2])
+        is_full = True  # If odometer given, assume full tank
 
-    while i < len(args):
-        arg = args[i]
-        if arg.lower() == "--full":
-            is_full = True
-            i += 1
-        elif arg.isdigit() and is_full:
-            odometer = int(arg)
-            i += 1
-            break
-        elif station is None:
-            station = arg
-            i += 1
-        else:
-            notes_parts.append(arg)
-            i += 1
-
-    notes = ' '.join(notes_parts) if notes_parts else None
-
-    if is_full and odometer is None:
-        await update.message.reply_text("Full tank (--full) requires odometer as last number.")
-        return
-
-    # Store parsed data for confirmation
+    # Store parsed data
     context.user_data["fillup_data"] = {
         "gallons": gallons,
         "price": price,
-        "station": station,
-        "notes": notes,
-        "is_full": is_full,
-        "odometer": odometer
+        "odometer": odometer,
+        "is_full": is_full
     }
 
-    # Fetch user's vehicles for confirmation buttons
+    # Show confirmation buttons with user's vehicles
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute("SELECT vehicle_id, plate, year, make, model FROM vehicles WHERE user_id=?", (user_id,))
@@ -101,7 +73,7 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="fillup_cancel")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Confirm vehicle for this fill-up:", reply_markup=reply_markup)
+    await update.message.reply_text("Which vehicle was this fill-up for?", reply_markup=reply_markup)
 
 async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -126,25 +98,23 @@ async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_
     fillup_data = context.user_data["fillup_data"]
     gallons = fillup_data["gallons"]
     price = fillup_data["price"]
-    station = fillup_data["station"]
-    notes = fillup_data["notes"]
-    is_full = fillup_data["is_full"]
     odometer = fillup_data["odometer"]
+    is_full = fillup_data["is_full"]
 
     fill_date = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
-            INSERT INTO fuel_records (vehicle_id, user_id, odometer, gallons, price, station, notes, fill_date, is_full_tank)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (vehicle_id, update.effective_user.id, odometer, gallons, price, station, notes, fill_date, 1 if is_full else 0))
+            INSERT INTO fuel_records (vehicle_id, user_id, odometer, gallons, price, fill_date, is_full_tank)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (vehicle_id, update.effective_user.id, odometer, gallons, price, fill_date, 1 if is_full else 0))
 
-        # Auto-log as expense
-        description = f"Fuel fill-up: {gallons} gal @ ${price or 0:.2f}"
+        # Auto-log as expense (no station/notes in this simple version)
+        description = f"Fuel fill-up: {gallons} gal @ ${price:.2f}"
         c.execute('''
             INSERT INTO finance_records (type, amount, description, vehicle_id, timestamp)
             VALUES ('expense', ?, ?, ?, ?)
-        ''', (price or 0, description, vehicle_id, fill_date))
+        ''', (price, description, vehicle_id, fill_date))
 
         conn.commit()
 
