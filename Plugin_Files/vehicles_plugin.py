@@ -93,7 +93,17 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             make_model_parts.append(arg)
 
-    if year is None or odometer is None
+    if year is None or odometer is None:
+        await update.message.reply_text("Couldn't find valid year and odometer numbers. Check your input.")
+        return
+
+    make_model = ' '.join(make_model_parts)
+    make_model_split = make_model.split(maxsplit=1)
+    make = make_model_split[0] if make_model_split else "Unknown"
+    model = make_model_split[1] if len(make_model_split) > 1 else "Unknown"
+
+    add_vehicle(user_id, plate, year, make, model, odometer)
+    await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
 
 async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
