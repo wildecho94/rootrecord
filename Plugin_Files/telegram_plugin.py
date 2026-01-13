@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260113 – Fixed syntax error + registered finance, geopy, vehicles plugins
+# Version: 20260113 – Fixed syntax + full registration of finance, geopy, vehicles plugins
 
 import asyncio
 import json
@@ -10,7 +10,7 @@ from threading import Thread
 from datetime import datetime
 import sqlite3
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     ContextTypes,
@@ -149,7 +149,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
         f"Hello {user.first_name}! 👋\\n"
-        "GPS tracking active. Send a location or live location to record it."
+        "GPS tracking active. Send a location or live location to record it.\\n"
+        "Use /vehicles for car management, /finance for money tracking."
     )
 handler = CommandHandler("start", start)
 ''', encoding='utf-8')
@@ -174,7 +175,7 @@ handler = CommandHandler("start", start)
             print(f"[telegram_plugin] FAILED to load {path.name}: {type(e).__name__}: {e}")
 
 # ────────────────────────────────────────────────
-# Location handler - catches BOTH new and edited (live) locations + auto-enrich
+# Location handler - auto-enrich with geopy
 # ────────────────────────────────────────────────
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("[telegram_plugin] Location handler triggered")
@@ -186,12 +187,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     saved, ping_id = save_gps_record(update)
     if saved:
         print("[telegram_plugin] Location saved successfully")
-        # Auto-enrich with geopy (original timestamp from save)
         if ping_id:
             loc = update.edited_message.location if update.edited_message else update.message.location
             orig_time = update.edited_message.edit_date.isoformat() if update.edited_message and update.edited_message.edit_date else \
                         (update.message.date.isoformat() if update.message.date else datetime.utcnow().isoformat())
-            # Simple enrichment (distance needs prev coords - can add later)
             from Plugin_Files.geopy_plugin import enrich_ping
             enrich_ping(ping_id, loc.latitude, loc.longitude, orig_time)
     else:
@@ -219,16 +218,21 @@ def register_new_plugins(application: Application):
     except ImportError as e:
         print(f"[telegram_plugin] Finance plugin not found: {e}")
 
-    # Vehicles plugin
+    # Vehicles plugin (full suite)
     try:
-        from Plugin_Files.vehicles_plugin import cmd_addvehicle, cmd_fillup
-        application.add_handler(CommandHandler("addvehicle", cmd_addvehicle))
+        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg
+        application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))  # /vehicle add ...
+        application.add_handler(CommandHandler("vehicles", cmd_vehicles))    # button menu
         application.add_handler(CommandHandler("fillup", cmd_fillup))
-        print("[telegram_plugin] /addvehicle and /fillup registered")
+        application.add_handler(CommandHandler("mpg", cmd_mpg))
+        application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
+        application.add_handler(CallbackQueryHandler(callback_fill, pattern="^veh_fill_"))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_fillup_input))
+        print("[telegram_plugin] Vehicles commands + buttons registered")
     except ImportError as e:
         print(f"[telegram_plugin] Vehicles plugin not found: {e}")
 
-    # Geopy is auto-called from handle_location (no extra command)
+    # Geopy is auto-called from handle_location (no command needed)
 
 # ────────────────────────────────────────────────
 # Main bot startup
