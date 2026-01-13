@@ -228,6 +228,27 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(text)
 
+async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT vehicle_id, plate, year, make, model FROM vehicles WHERE user_id=?", (user_id,))
+        vehicles = c.fetchall()
+
+    if not vehicles:
+        await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
+        return
+
+    keyboard = []
+    for v in vehicles:
+        vid, plate, year, make, model = v
+        button_text = f"{year} {make} {model} ({plate})"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"veh_fill_{vid}")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Select vehicle for fill-up:", reply_markup=reply_markup)
+
 def initialize():
     init_db()
     print("[vehicles_plugin] Initialized – multi-vehicle & fuel tracking ready")
