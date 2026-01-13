@@ -48,12 +48,13 @@ def init_db():
     print("[vehicles_plugin] Vehicles & fuel tables ready")
 
 def add_vehicle(user_id: int, plate: str, year: int, make: str, model: str, odometer: int):
+    plate = plate.upper()
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
             INSERT OR IGNORE INTO vehicles (user_id, plate, year, make, model, initial_odometer)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, plate.upper(), year, make, model, odometer))
+        ''', (user_id, plate, year, make, model, odometer))
         conn.commit()
     print(f"[vehicles] Added vehicle {plate} for user {user_id}")
 
@@ -76,7 +77,7 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     model = args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
-    await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate.upper()}), initial odometer {odometer}")
+    await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
 
 async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -227,27 +228,6 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"{year} {make} {model} ({plate}): Last MPG {last_mpg:.1f if last_mpg else 'N/A'}, Avg {avg_mpg:.1f if avg_mpg else 'N/A'}\n"
 
     await update.message.reply_text(text)
-
-async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute("SELECT vehicle_id, plate, year, make, model FROM vehicles WHERE user_id=?", (user_id,))
-        vehicles = c.fetchall()
-
-    if not vehicles:
-        await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
-        return
-
-    keyboard = []
-    for v in vehicles:
-        vid, plate, year, make, model = v
-        button_text = f"{year} {make} {model} ({plate})"
-        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"veh_fill_{vid}")])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Select vehicle for fill-up:", reply_markup=reply_markup)
 
 def initialize():
     init_db()
