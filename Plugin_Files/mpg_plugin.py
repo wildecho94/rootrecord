@@ -38,7 +38,7 @@ def calculate_mpg_for_vehicle(vehicle_id: int):
         prev = full_tanks[i-1]
         curr = full_tanks[i]
         miles = curr[1] - prev[1]          # odometer difference
-        gallons_used = curr[2]             # gallons of current fill
+        gallons_used = curr[2]             # gallons of current fill (assumes previous partials included)
         if gallons_used > 0:
             mpg = miles / gallons_used
             mpgs.append(mpg)
