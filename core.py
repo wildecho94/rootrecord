@@ -30,11 +30,12 @@ BACKUPS_FOLDER = BASE_DIR / "backups"
 def log_debug(message):
     now = datetime.now()
     timestamp = now.strftime("[%Y-%m-%d %H:%M:%S.%f]")[:-3]
-    print(f"{timestamp} {message}")
+    full_message = f"{timestamp} {message}"
+    print(full_message)
 
     LOGS_FOLDER.mkdir(exist_ok=True)
-    with open(DEBUG_LOG, "a") as f:
-        f.write(f"{timestamp} {message}\n")
+    with open(DEBUG_LOG, "a", encoding="utf-8") as f:
+        f.write(full_message + "\n")
 
 def clear_pycache_folders():
     cleared = 0
@@ -136,7 +137,7 @@ if __name__ == "__main__":
     initialize_system()
     log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
 
-    # Start Cloudflare Tunnel (optional - comment out if not needed)
+    # Start Cloudflare Tunnel
     try:
         from plugins.web.tunnel import initialize as tunnel_init
         tunnel_init()
