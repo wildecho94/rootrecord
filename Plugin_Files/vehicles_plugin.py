@@ -61,46 +61,20 @@ def add_vehicle(user_id: int, plate: str, year: int, make: str, model: str, odom
 async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
-
-    # Debug: show exactly what Telegram sent
-    print(f"[DEBUG cmd_vehicle_add] Raw input: '{update.message.text}'")
-    print(f"[DEBUG cmd_vehicle_add] Split args: {args}")
-
-    if len(args) < 4:
-        await update.message.reply_text(
-            "Exact format:\n"
-            "/vehicle add <Plate> <Year> <Make> <Model> <Odometer>\n\n"
-            "Example:\n"
-            "/vehicle add WZP484 2014 Chevy Cruze 60675\n"
-            "Make/Model can be multiple words. Odometer must be last."
-        )
+    if len(args) < 5:
+        await update.message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
         return
 
-    plate = args[0].upper()
-
-    # Find year and odometer by looking for numbers
-    year = None
-    odometer = None
-    make_model_parts = []
-
-    for arg in args[1:]:
-        try:
-            num = int(arg.strip())  # strip any whitespace
-            if year is None:
-                year = num
-            else:
-                odometer = num
-        except ValueError:
-            make_model_parts.append(arg)
-
-    if year is None or odometer is None:
-        await update.message.reply_text("Couldn't find valid year and odometer numbers. Check your input.")
+    plate = args[0]
+    try:
+        year = int(args[1])
+        odometer = int(args[4])
+    except ValueError:
+        await update.message.reply_text("Year and Odometer must be numbers.")
         return
 
-    make_model = ' '.join(make_model_parts)
-    make_model_split = make_model.split(maxsplit=1)
-    make = make_model_split[0] if make_model_split else "Unknown"
-    model = make_model_split[1] if len(make_model_split) > 1 else "Unknown"
+    make = args[2]
+    model = args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
     await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
@@ -162,31 +136,36 @@ async def callback_fill(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
     if not data.startswith("veh_fill_"):
-        print(f"[DEBUG] Invalid callback data: {data}")
         return
 
     vehicle_id = int(data.split("_")[-1])
     context.user_data["fillup_vehicle_id"] = vehicle_id
-    print(f"[DEBUG] Fill-up callback: vehicle_id={vehicle_id}, user_id={update.effective_user.id}")
 
-    await query.edit_message_text(
+    # Delete the original button message
+    try:
+        await query.message.delete()
+        print("[DEBUG] Deleted button message after vehicle selection")
+    except Exception as e:
+        print(f"[DEBUG] Could not delete button message: {e}")
+
+    # Send new clean message asking for input
+    await query.message.reply_text(
         f"Selected vehicle ID {vehicle_id}\n\n"
         "Enter fill-up details:\n"
         "gallons price [station] [notes] [--full]\n"
-        "Odometer required only for full tanks"
+        "Odometer required only for full tanks\n\n"
+        "Reply to this message with your input."
     )
 
 async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "fillup_vehicle_id" not in context.user_data:
-        print("[DEBUG] No fillup_vehicle_id in context — ignoring text message")
         return
 
     user_id = update.effective_user.id
     vehicle_id = context.user_data["fillup_vehicle_id"]
     text = update.message.text.strip()
-    print(f"[DEBUG] Fill-up input: user={user_id}, vehicle={vehicle_id}, text='{text}'")
-
     args = text.split()
+
     if len(args) < 2:
         await update.message.reply_text("Format: gallons price [station] [notes] [--full]")
         return
@@ -232,7 +211,7 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     if "fillup_pending_full" in context.user_data:
         del context.user_data["fillup_pending_full"]
 
-    reply = f"Fill-up logged for vehicle {vehicle_id}. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
+    reply = f"Fill-up logged. {'Full tank – MPG will be calculated.' if is_full else 'Partial fill-up logged.'}"
     await update.message.reply_text(reply)
 
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
