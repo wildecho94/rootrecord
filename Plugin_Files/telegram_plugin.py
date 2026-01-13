@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260112 – Fixed: removed UNIQUE constraint so EVERY ping is saved
+# Version: 20260113 – Fixed datetime TypeError (no fromtimestamp needed)
 
 import asyncio
 import json
@@ -46,7 +46,7 @@ print(f"[telegram_plugin] Root path: {ROOT}")
 print(f"[telegram_plugin] DB path: {DB_PATH}")
 
 # ────────────────────────────────────────────────
-# Database - immediate save on EVERY ping (no UNIQUE constraint)
+# Database - immediate save on EVERY ping
 # ────────────────────────────────────────────────
 def init_db():
     print("[telegram_plugin] Initializing database...")
@@ -92,16 +92,16 @@ def save_gps_record(update: Update):
     loc = msg.location
     user = msg.from_user
 
-    # Prefer edit_date for live updates, fall back to message date or now
+    # Use already-parsed datetime objects directly
     if update.edited_message and msg.edit_date:
-        ping_time = datetime.fromtimestamp(msg.edit_date).isoformat()
+        ping_time = msg.edit_date.isoformat()
         ping_type = "EDIT (live ping)"
     elif msg.date:
-        ping_time = datetime.fromtimestamp(msg.date).isoformat()
+        ping_time = msg.date.isoformat()
         ping_type = "NEW"
     else:
         ping_time = datetime.utcnow().isoformat()
-        ping_type = "FALLBACK"
+        ping_type = "FALLBACK (no date)"
 
     print(f"[telegram_plugin] Saving {ping_type} for user {user.id} ({user.username or 'no username'}): "
           f"({loc.latitude:.6f}, {loc.longitude:.6f}) @ {ping_time} | Msg ID: {msg.message_id}")
@@ -133,7 +133,7 @@ def save_gps_record(update: Update):
             conn.close()
 
 # ────────────────────────────────────────────────
-# Command loading (unchanged)
+# Command loading
 # ────────────────────────────────────────────────
 def load_commands(application: Application):
     print("[telegram_plugin] Loading commands from folder...")
@@ -173,7 +173,7 @@ handler = CommandHandler("start", start)
             print(f"[telegram_plugin] FAILED to load {path.name}: {type(e).__name__}: {e}")
 
 # ────────────────────────────────────────────────
-# Location handler (unchanged)
+# Location handler
 # ────────────────────────────────────────────────
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("[telegram_plugin] Location handler triggered")
@@ -197,7 +197,7 @@ async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"[telegram_plugin] {prefix} from {user.username or user.id} (id:{user.id}): {text}")
 
 # ────────────────────────────────────────────────
-# Main bot startup (unchanged)
+# Main bot startup
 # ────────────────────────────────────────────────
 TOKEN = None
 try:
@@ -250,7 +250,7 @@ async def bot_main():
 
 def initialize():
     print("[telegram_plugin] initialize() called")
-    init_db()  # Always init DB
+    init_db()
     if TOKEN:
         print("[telegram_plugin] Launching bot in background thread...")
         Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
