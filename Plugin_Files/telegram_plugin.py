@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260113 – Fixed datetime TypeError (no fromtimestamp needed)
+# Version: 20260113 – Registered finance, geopy, vehicles plugins + auto-enrichment
 
 import asyncio
 import json
@@ -87,7 +87,7 @@ def save_gps_record(update: Update):
     msg = update.message or update.edited_message
     if not msg or not msg.location:
         print("[telegram_plugin] No location found - skipping save")
-        return False
+        return False, None
 
     loc = msg.location
     user = msg.from_user
@@ -123,11 +123,12 @@ def save_gps_record(update: Update):
             getattr(msg, 'live_period', None), ping_time
         ))
         conn.commit()
-        print(f"[telegram_plugin] SUCCESS: Saved ping (rowid: {cursor.lastrowid})")
-        return True
+        ping_id = cursor.lastrowid
+        print(f"[telegram_plugin] SUCCESS: Saved ping (id: {ping_id or 'new'})")
+        return True, ping_id
     except sqlite3.Error as e:
         print(f"[telegram_plugin] SAVE FAILED: {e}")
-        return False
+        return False, None
     finally:
         if 'conn' in locals():
             conn.close()
@@ -173,7 +174,7 @@ handler = CommandHandler("start", start)
             print(f"[telegram_plugin] FAILED to load {path.name}: {type(e).__name__}: {e}")
 
 # ────────────────────────────────────────────────
-# Location handler
+# Location handler - catches BOTH new and edited (live) locations + auto-enrich
 # ────────────────────────────────────────────────
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("[telegram_plugin] Location handler triggered")
@@ -182,77 +183,16 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         print("[telegram_plugin] → NEW message")
 
-    saved = save_gps_record(update)
+    saved, ping_id = save_gps_record(update)
     if saved:
         print("[telegram_plugin] Location saved successfully")
+        # Auto-enrich with geopy (original timestamp from save)
+        if ping_id:
+            loc = update.edited_message.location if update.edited_message else update.message.location
+            orig_time = update.edited_message.edit_date.isoformat() if update.edited_message and update.edited_message.edit_date else \
+                        (update.message.date.isoformat() if update.message.date else datetime.utcnow().isoformat())
+            # Simple enrichment (distance needs prev coords - can add later)
+            from Plugin_Files.geopy_plugin import enrich_ping
+            enrich_ping(ping_id, loc.latitude, loc.longitude, orig_time)
     else:
-        print("[telegram_plugin] Location save failed")
-
-async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message:
-        msg = update.message
-        text = msg.text or msg.caption or "[no text]"
-        prefix = "COMMAND" if text.startswith('/') else "MESSAGE"
-        user = msg.from_user
-        print(f"[telegram_plugin] {prefix} from {user.username or user.id} (id:{user.id}): {text}")
-
-# ────────────────────────────────────────────────
-# Main bot startup
-# ────────────────────────────────────────────────
-TOKEN = None
-try:
-    with CONFIG_PATH.open(encoding="utf-8") as f:
-        config = json.load(f)
-        TOKEN = config.get("bot_token")
-    if TOKEN:
-        print("[telegram_plugin] Token loaded successfully")
-    else:
-        print("[telegram_plugin] WARNING: bot_token missing in config_telegram.json")
-except Exception as e:
-    print(f"[telegram_plugin] Config load failed: {e}")
-
-async def bot_main():
-    if not TOKEN:
-        print("[telegram_plugin] No valid token → exiting")
-        return
-
-    print("[telegram_plugin] Starting bot...")
-    application = Application.builder().token(TOKEN).build()
-
-    print("[telegram_plugin] Loading commands...")
-    load_commands(application)
-
-    print("[telegram_plugin] Adding location handler (new + edited messages)...")
-    application.add_handler(MessageHandler(filters.LOCATION, handle_location))
-    application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_location))
-
-    print("[telegram_plugin] Adding global message logger...")
-    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, log_all))
-
-    print("[telegram_plugin] Initializing application...")
-    await application.initialize()
-    print("[telegram_plugin] Application initialized")
-
-    print("[telegram_plugin] Starting bot...")
-    await application.start()
-    print("[telegram_plugin] Bot started")
-
-    print("[telegram_plugin] Starting polling...")
-    await application.updater.start_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES,
-        poll_interval=0.5,
-        timeout=10
-    )
-    print("[telegram_plugin] Polling active – full activity should now be visible")
-
-    await asyncio.Event().wait()
-
-def initialize():
-    print("[telegram_plugin] initialize() called")
-    init_db()
-    if TOKEN:
-        print("[telegram_plugin] Launching bot in background thread...")
-        Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
-    else:
-        print("[telegram_plugin] No token – bot disabled")
+        print("

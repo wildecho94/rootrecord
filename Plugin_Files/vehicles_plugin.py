@@ -82,7 +82,7 @@ def log_fillup(user_id: int, vehicle_name: str, odometer: int, gallons: float, p
         row = c.fetchone()
         if not row:
             print(f"[vehicles] Vehicle '{vehicle_name}' not found")
-            return False, None
+            return False
         vehicle_id = row[0]
 
         c.execute('''
@@ -99,7 +99,7 @@ def log_fillup(user_id: int, vehicle_name: str, odometer: int, gallons: float, p
 
         conn.commit()
     print(f"[vehicles] Fill-up logged for '{vehicle_name}'")
-    return True, vehicle_id
+    return True
 
 async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -120,7 +120,7 @@ async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     station = args[4] if len(args) > 4 else None
     notes = ' '.join(args[5:]) if len(args) > 5 else None
 
-    success, _ = log_fillup(user_id, vehicle_name, odometer, gallons, price, station, notes)
+    success = log_fillup(user_id, vehicle_name, odometer, gallons, price, station, notes)
     if success:
         await update.message.reply_text(f"Fill-up logged for '{vehicle_name}'. MPG pending next fill.")
     else:
@@ -129,4 +129,3 @@ async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def initialize():
     init_db()
     print("[vehicles_plugin] Initialized – multi-vehicle & fuel tracking ready")
-    # TODO: register commands in telegram_plugin or core
