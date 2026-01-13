@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260112 – Fixed late_register call, immediate DB saves, live edits handled
+# Version: 20260112 – Fixed: removed UNIQUE constraint so EVERY ping is saved
 
 import asyncio
 import json
@@ -46,7 +46,7 @@ print(f"[telegram_plugin] Root path: {ROOT}")
 print(f"[telegram_plugin] DB path: {DB_PATH}")
 
 # ────────────────────────────────────────────────
-# Database - immediate save on every location
+# Database - immediate save on EVERY ping (no UNIQUE constraint)
 # ────────────────────────────────────────────────
 def init_db():
     print("[telegram_plugin] Initializing database...")
@@ -71,13 +71,12 @@ def init_db():
                 altitude REAL,
                 live_period INTEGER,
                 timestamp TEXT NOT NULL,
-                received_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(message_id, user_id) ON CONFLICT IGNORE
+                received_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_timestamp ON gps_records (user_id, timestamp)')
         conn.commit()
-        print(f"[telegram_plugin] Database ready at: {DB_PATH}")
+        print(f"[telegram_plugin] Database ready at: {DB_PATH} (every ping saved)")
     except sqlite3.Error as e:
         print(f"[telegram_plugin] DB ERROR: {e}")
     finally:
@@ -87,22 +86,31 @@ def init_db():
 def save_gps_record(update: Update):
     msg = update.message or update.edited_message
     if not msg or not msg.location:
-        print("[telegram_plugin] No location found in message/edited_message - skipping save")
+        print("[telegram_plugin] No location found - skipping save")
         return False
 
     loc = msg.location
     user = msg.from_user
-    timestamp = datetime.utcnow().isoformat()
-    live_period = getattr(msg, 'live_period', None)
 
-    print(f"[telegram_plugin] Saving location for user {user.id} ({user.username or 'no username'}): "
-          f"({loc.latitude:.6f}, {loc.longitude:.6f}) @ {timestamp} | Live: {live_period}s | Msg ID: {msg.message_id}")
+    # Prefer edit_date for live updates, fall back to message date or now
+    if update.edited_message and msg.edit_date:
+        ping_time = datetime.fromtimestamp(msg.edit_date).isoformat()
+        ping_type = "EDIT (live ping)"
+    elif msg.date:
+        ping_time = datetime.fromtimestamp(msg.date).isoformat()
+        ping_type = "NEW"
+    else:
+        ping_time = datetime.utcnow().isoformat()
+        ping_type = "FALLBACK"
+
+    print(f"[telegram_plugin] Saving {ping_type} for user {user.id} ({user.username or 'no username'}): "
+          f"({loc.latitude:.6f}, {loc.longitude:.6f}) @ {ping_time} | Msg ID: {msg.message_id}")
 
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR IGNORE INTO gps_records (
+            INSERT INTO gps_records (
                 user_id, username, first_name, last_name,
                 chat_id, message_id,
                 latitude, longitude, accuracy, heading,
@@ -112,10 +120,10 @@ def save_gps_record(update: Update):
             user.id, user.username, user.first_name, user.last_name,
             msg.chat.id, msg.message_id,
             loc.latitude, loc.longitude, loc.horizontal_accuracy, loc.heading,
-            live_period, timestamp
+            getattr(msg, 'live_period', None), ping_time
         ))
         conn.commit()
-        print(f"[telegram_plugin] SUCCESS: Saved GPS record for user {user.id} (rowid: {cursor.lastrowid})")
+        print(f"[telegram_plugin] SUCCESS: Saved ping (rowid: {cursor.lastrowid})")
         return True
     except sqlite3.Error as e:
         print(f"[telegram_plugin] SAVE FAILED: {e}")
@@ -125,7 +133,7 @@ def save_gps_record(update: Update):
             conn.close()
 
 # ────────────────────────────────────────────────
-# Command loading
+# Command loading (unchanged)
 # ────────────────────────────────────────────────
 def load_commands(application: Application):
     print("[telegram_plugin] Loading commands from folder...")
@@ -165,12 +173,12 @@ handler = CommandHandler("start", start)
             print(f"[telegram_plugin] FAILED to load {path.name}: {type(e).__name__}: {e}")
 
 # ────────────────────────────────────────────────
-# Location handler - catches BOTH new and edited (live) locations
+# Location handler (unchanged)
 # ────────────────────────────────────────────────
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("[telegram_plugin] Location handler triggered")
     if update.edited_message:
-        print("[telegram_plugin] → EDITED message (live location update)")
+        print("[telegram_plugin] → EDITED message (live location ping)")
     else:
         print("[telegram_plugin] → NEW message")
 
@@ -189,7 +197,7 @@ async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"[telegram_plugin] {prefix} from {user.username or user.id} (id:{user.id}): {text}")
 
 # ────────────────────────────────────────────────
-# Main bot startup
+# Main bot startup (unchanged)
 # ────────────────────────────────────────────────
 TOKEN = None
 try:
@@ -242,7 +250,7 @@ async def bot_main():
 
 def initialize():
     print("[telegram_plugin] initialize() called")
-    init_db()  # Always init DB, even if bot is disabled
+    init_db()  # Always init DB
     if TOKEN:
         print("[telegram_plugin] Launching bot in background thread...")
         Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
