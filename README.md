@@ -1,102 +1,122 @@
 # RootRecord
+v1.42.20260112-2 – Second build of the day
 
-**Modular Python plugin system with auto-maintained templates**
+Self-bootstrapping, modular Python plugin system + Telegram bot framework  
+Designed for personal automation, bots, GPS tracking, uptime monitoring, and extensibility.
 
-**Version:** 20260112 ("Merged & Visible")  
-**Last edited:** January 12, 2026  
-**Status:** Early / active development
+Current State (as of Jan 13 2026)
+- Fully working Telegram bot with live location tracking
+- Every ping (initial location + all live edits) saved to database
+- Reliable uptime tracking across restarts/crashes
+- Auto-backup, debug logging, folder setup, pycache cleaning
+- GitHub auto-publish (optional – high risk if token is present)
+- Centralized asyncio scheduler
+- Plugin auto-discovery & loading
 
-RootRecord is a lightweight, self-bootstrapping framework for building extensible Python applications — especially bots and automation tools — using a clean, plugin-based architecture.
+Quick Start
 
-### Current Features
+1. Clone or download:
+   git clone https://github.com/wildecho94/rootrecord.git
+   cd rootrecord
 
-**Automatic setup & safety**  
-- Creates `Core_Files/`, `Handler_Files/`, `Plugin_Files/` folders (with `__init__.py`)  
-- Generates blank plugin templates when needed  
-- Clears `__pycache__` on startup  
-- Creates timestamped backups (skips `.zip` files)  
-- Mirrors all console output → `debug_rootrecord.log`  
+2. Install dependencies:
+   pip install python-telegram-bot httpx
 
-**Plugin system**  
-- Auto-discovers `Plugin_Files/*.py` files (especially `*_plugin.py`)  
-- Supports single-file plugins or split (main/core/handler)  
-- Calls `initialize()` hook if defined  
+3. Create config_telegram.json in root (do not commit!):
+   {
+     "bot_token": "your_bot_token_here"
+   }
 
-**Telegram bot + GPS tracking** (single merged plugin: `telegram_plugin.py`)  
-- Loads token from `config_telegram.json` (**never commit this file!**)  
-- Auto-adds `/start` command  
-- Loads additional commands dynamically from `commands/` folder  
-- Saves **every** location pin and **every live location update/edit** to database immediately  
-- Full verbose console logging of all messages, commands, locations, callbacks, saves  
-- Background polling with `drop_pending_updates=True`  
+4. Run:
+   python core.py
+   # or on Windows: double-click start_rootrecord.bat
 
-**Uptime tracking** (single-file example)  
-- Tracks start/stop/crash events  
-- Calculates uptime percentage  
-- Prints stats every 60 seconds + on startup  
-- Saves snapshots to `uptime_stats` table  
+The bot starts polling. Send /start or a live location to test.
 
-**Centralized task scheduler** (`Core_Files/scheduler.py`)  
-- Reliable periodic jobs without starvation (e.g. uptime stats)  
+Key Features
 
-**GitHub auto-publish** (`publish_rootrecord.py`)  
-- Commits & pushes changes automatically on startup  
-- Handles deleted/moved files (`git add -u`)  
-- **Security warning:** Contains GitHub token — **delete after use!**  
+- Plugin System
+  - Auto-discovers all .py files in Plugin_Files/
+  - Calls initialize() if present
+  - Supports single-file and split plugins
 
-### Architecture Highlights (Jan 12, 2026)
+- Telegram Bot (telegram_plugin.py)
+  - Loads token from config_telegram.json
+  - Auto-registers /start
+  - Saves every live location ping to gps_records
+  - Handles new locations + edited live messages
+  - Verbose logging of all messages/commands
 
-- Telegram bot + GPS location saving merged into **one file** (`telegram_plugin.py`) → no more load-order races or late registration  
-- Immediate DB writes for every location update (regular pins + live shares + edits)  
-- Verbose console output for every step, update, and save action  
-- Redundant files removed (old GPS handler/core, separate Telegram handler)  
-- Commands still loaded dynamically from `commands/` folder  
-- Scheduler and uptime plugin continue to run independently  
+- Uptime Monitoring (uptime_plugin.py)
+  - Tracks start/stop/crash events
+  - Calculates true lifetime uptime percentage
+  - Prints yellow stats every 60 seconds
+  - Saves periodic snapshots to uptime_stats
+  - /uptime command shows current lifetime stats
 
-### Changelog – 20260112 ("Merged & Visible")
+- Self-Maintenance
+  - Clears __pycache__ folders on startup
+  - Creates timestamped code/data backups
+  - Optional auto-commit & push to GitHub (use carefully!)
+  - Centralized asyncio loop + scheduler
 
-- **Merged** Telegram bot + GPS tracking into single `telegram_plugin.py` (no more separate plugins or races)  
-- **Immediate saves** for every location pin, live share, and live edit  
-- **Verbose logging** — every message/command/location/callback/save printed in console  
-- Removed redundant files: `a_gps_plugin.py`, `gps_tracker_handler.py`, `gps_tracker_core.py`, `telegram_handler.py`  
-- Fixed live location edits (now explicitly handled via `EDITED_MESSAGE & filters.LOCATION`)  
-- Cleaned up print overrides and color attempts (stable plain-text output)  
+- Database (data/rootrecord.db)
+  - gps_records: every ping (lat, lon, accuracy, heading, timestamp, received_at)
+  - uptime_records: start/stop/crash events
+  - uptime_stats: periodic snapshots
 
-### Security Notes
+Security – Important!
 
-- **Never commit** `config_telegram.json` or any tokens/secrets  
-- `publish_rootrecord.py` contains GitHub PAT → **delete after use**  
-- Regenerate Telegram bot token if ever exposed  
-- Add `.gitignore` entries for secrets, logs, backups, `__pycache__`  
+Never commit or share:
+- config_telegram.json (contains bot token)
+- publish_rootrecord.py (contains GitHub token if used)
+- __pycache__/, backups, logs, .db files
 
-### Roadmap (2026)
+Recommended .gitignore additions:
+config_*.json
+publish_*.py
+*.secrets.*
+backups/
+__pycache__/
+*.db
+*.log
 
-**Short-term**  
-- Stabilize Telegram/GPS saves & logging  
-- Crash detection & graceful shutdown  
-- Expose scheduler to plugins for custom periodic tasks  
+Folder Structure
 
-**Medium-term**  
-- Plugin hot-reload  
-- Advanced command parsing (args, prefixes)  
-- User/session tracking in DB  
-- Multi-platform exploration (Discord?)  
+rootrecord/
+├── Core_Files/           # scheduler, shared logic
+├── Handler_Files/        # message/command handlers
+├── Plugin_Files/         # plugins (telegram_plugin.py, uptime_plugin.py, ...)
+├── commands/             # Telegram commands (start_cmd.py, ...)
+├── data/                 # rootrecord.db (SQLite)
+├── backups/              # auto backups
+├── debug_rootrecord.log  # console mirror
+├── core.py               # main entry
+├── start_rootrecord.bat  # Windows launcher
+└── README.md
 
-**Long-term**  
-- Self-healing framework  
-- Plugin marketplace  
-- AI agent hooks  
+Roadmap – Next Steps
 
-### Contributing
+Immediate / this week
+- Hot-reload for plugins
+- Better crash detection (auto "crash" on unclean shutdown)
+- Expose scheduler to plugins
+- /gps command (recent pings or map link)
 
-Early-stage project — breaking changes still possible.  
-Current focus: **stability & visibility > new features**
+Medium term
+- Multi-platform (Discord?)
+- Plugin template gallery
+- Self-healing (auto-restart on crash)
+- GPS export to GPX/KML
 
-Open issues/PRs welcome — especially bug fixes, plugin ideas, logging improvements.
+Long term
+- AI agent hooks
+- Visual dashboard (Telegram mini-app or web)
+- Voice/image recognition
 
----
-**Live repo:** https://github.com/wildecho94/rootrecord  
-**Bot:** @RootRecordCore_bot (send /start & locations)  
-**DB:** `data/rootrecord.db` → `gps_records` table (fills on every location update)  
+Contact / Contribute
 
-**RootRecord** — bootstrapping your ideas, one plugin at a time.
+Early personal project – feedback, issues, PRs welcome!
+
+GitHub: https://github.com/wildecho94/rootrecord
+X: @wildecho94
