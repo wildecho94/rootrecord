@@ -81,30 +81,43 @@ def discover_plugins():
     plugins = {}
     log_debug("\nDiscovered potential plugin(s):")
 
-    # Recursive search in Plugin_Files and subfolders
-    for path in PLUGIN_FOLDER.rglob("*_plugin.py"):
-        if path.name.startswith("__"):
+    # Search ALL .py files in the entire project root and subfolders
+    for path in BASE_DIR.rglob("*.py"):
+        # Skip internal files and known non-plugin locations
+        if (
+            path.name.startswith("__") or
+            path.name == "__init__.py" or
+            "Core_Files" in path.parts or
+            "Handler_Files" in path.parts or
+            "__pycache__" in path.parts or
+            "logs" in path.parts or
+            "backups" in path.parts or
+            "data" in path.parts
+        ):
             continue
 
         name = path.stem
         try:
-            spec = importlib.util.spec_from_file_location(f"plugins.{name}", path)
+            # Use relative module name
+            rel_path = path.relative_to(BASE_DIR)
+            module_name = ".".join(rel_path.with_suffix("").parts)
+            spec = importlib.util.spec_from_file_location(module_name, path)
+            if not spec:
+                continue
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            entry_points = []
-            if hasattr(module, "main"):
-                entry_points.append("main")
-            if hasattr(module, "core"):
-                entry_points.append("core")
-            if hasattr(module, "handler"):
-                entry_points.append("handler")
-            if entry_points:
+
+            # Only load as plugin if it has initialize()
+            if hasattr(module, "initialize"):
                 plugins[name] = module
-                log_debug(f"{name} → {', '.join(entry_points)}")
+                log_debug(f"{name} → initialize() found (path: {path})")
+            else:
+                log_debug(f"{name} → skipped (no initialize())")
         except Exception as e:
-            log_debug(f"Failed to discover {path.name}: {e}")
+            log_debug(f"Failed to load {path.name}: {e}")
 
     log_debug(f"────────────────────────────────────────────────────────────\n")
+    log_debug(f"Total plugins loaded: {len(plugins)}\n")
 
     return plugins
 
