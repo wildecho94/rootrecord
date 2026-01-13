@@ -116,25 +116,63 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
+        # Get all vehicles for the user
         c.execute('''
-            SELECT v.plate, v.year, v.make, v.model, AVG(f.mpg_calculated) as avg_mpg, MAX(f.mpg_calculated) as last_mpg
-            FROM vehicles v
-            LEFT JOIN fuel_records f ON v.vehicle_id = f.vehicle_id AND f.is_full_tank = 1
-            WHERE v.user_id = ?
-            GROUP BY v.vehicle_id
+            SELECT vehicle_id, plate, year, make, model, initial_odometer
+            FROM vehicles
+            WHERE user_id = ?
         ''', (user_id,))
-        results = c.fetchall()
+        vehicles = c.fetchall()
 
-    if not results:
-        await update.message.reply_text("No MPG data yet. Log full tank fill-ups first.")
+    if not vehicles:
+        await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
         return
 
     text = "MPG Stats:\n"
-    for row in results:
-        plate, year, make, model, avg_mpg, last_mpg = row
-        last_str = f"{last_mpg:.1f}" if last_mpg is not None else "N/A"
-        avg_str = f"{avg_mpg:.1f}" if avg_mpg is not None else "N/A"
-        text += f"{year} {make} {model} ({plate}): Last MPG {last_str}, Avg {avg_str}\n"
+    has_data = False
+
+    for veh in vehicles:
+        vehicle_id, plate, year, make, model, initial_odometer = veh
+
+        # Get all full-tank fills with odometer, ordered by date
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute('''
+                SELECT fill_id, odometer, gallons, fill_date
+                FROM fuel_records
+                WHERE vehicle_id = ? AND is_full_tank = 1 AND odometer IS NOT NULL
+                ORDER BY fill_date ASC
+            ''', (vehicle_id,))
+            full_tanks = c.fetchall()
+
+        if len(full_tanks) == 0:
+            text += f"{year} {make} {model} ({plate}): No full-tank data yet\n"
+            continue
+
+        mpgs = []
+        prev_odometer = initial_odometer  # Use initial as baseline for first fill
+
+        for fill in full_tanks:
+            current_odometer, gallons = fill[1], fill[2]
+            if current_odometer is None or gallons <= 0:
+                continue
+            miles = current_odometer - prev_odometer
+            if miles > 0:
+                mpg = miles / gallons
+                mpgs.append(mpg)
+            prev_odometer = current_odometer  # Update for next interval
+
+        if not mpgs:
+            text += f"{year} {make} {model} ({plate}): No valid MPG intervals (check odometer progression)\n"
+            continue
+
+        has_data = True
+        avg_mpg = sum(mpgs) / len(mpgs)
+        last_mpg = mpgs[-1]
+        text += f"{year} {make} {model} ({plate}): Last MPG {last_mpg:.1f}, Avg {avg_mpg:.1f} (over {len(mpgs)} intervals)\n"
+
+    if not has_data:
+        text += "\nNo MPG data yet. Log full tank fill-ups with odometer to start tracking."
 
     await update.message.reply_text(text)
 
