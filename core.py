@@ -1,8 +1,10 @@
 # RootRecord core.py
 # Edited Version: 1.42.20260114
 
-from pathlib import Path
 import sys
+sys.path.insert(0, str(Path(__file__).parent))  # Add project root to import path
+
+from pathlib import Path
 import shutil
 import os
 from datetime import datetime
@@ -79,7 +81,7 @@ def discover_plugins():
     plugins = {}
     log_debug("\nDiscovered potential plugin(s):")
 
-    # Use rglob to find recursively (in case plugins are in subfolders like web/)
+    # Recursive search in Plugin_Files and subfolders
     for path in PLUGIN_FOLDER.rglob("*_plugin.py"):
         if path.name.startswith("__"):
             continue
