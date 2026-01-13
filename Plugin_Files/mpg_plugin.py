@@ -1,4 +1,4 @@
-# Plugin_Files/pg_plugin.pym
+# Plugin_Files/mpg_plugin.py
 # Version: 20260113 – Dedicated MPG stats & calculations
 
 """
@@ -16,6 +16,10 @@ ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def calculate_mpg_for_vehicle(vehicle_id: int):
+    """
+    Calculate last MPG and average MPG for a vehicle based on full-tank fill-ups.
+    Returns (last_mpg, avg_mpg) or (None, None) if not enough data.
+    """
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
@@ -27,14 +31,14 @@ def calculate_mpg_for_vehicle(vehicle_id: int):
         full_tanks = c.fetchall()
 
     if len(full_tanks) < 2:
-        return None, None  # not enough full tanks for MPG
+        return None, None  # Not enough full tanks to calculate MPG
 
     mpgs = []
     for i in range(1, len(full_tanks)):
         prev = full_tanks[i-1]
         curr = full_tanks[i]
-        miles = curr[1] - prev[1]
-        gallons_used = curr[2]  # current fill gallons (assumes previous partials included)
+        miles = curr[1] - prev[1]          # odometer difference
+        gallons_used = curr[2]             # gallons of current fill
         if gallons_used > 0:
             mpg = miles / gallons_used
             mpgs.append(mpg)

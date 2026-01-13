@@ -61,46 +61,20 @@ def add_vehicle(user_id: int, plate: str, year: int, make: str, model: str, odom
 async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
-
-    # Debug: show exactly what Telegram sent
-    print(f"[DEBUG cmd_vehicle_add] Raw input: '{update.message.text}'")
-    print(f"[DEBUG cmd_vehicle_add] Split args: {args}")
-
-    if len(args) < 4:
-        await update.message.reply_text(
-            "Exact format:\n"
-            "/vehicle add <Plate> <Year> <Make> <Model> <Odometer>\n\n"
-            "Example:\n"
-            "/vehicle add WZP484 2014 Chevy Cruze 60675\n"
-            "Make/Model can be multiple words. Odometer must be last."
-        )
+    if len(args) < 5:
+        await update.message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
         return
 
-    plate = args[0].upper()
-
-    # Find year and odometer by looking for numbers
-    year = None
-    odometer = None
-    make_model_parts = []
-
-    for arg in args[1:]:
-        try:
-            num = int(arg.strip())  # strip any whitespace
-            if year is None:
-                year = num
-            else:
-                odometer = num
-        except ValueError:
-            make_model_parts.append(arg)
-
-    if year is None or odometer is None:
-        await update.message.reply_text("Couldn't find valid year and odometer numbers. Check your input.")
+    plate = args[0]
+    try:
+        year = int(args[1])
+        odometer = int(args[4])
+    except ValueError:
+        await update.message.reply_text("Year and Odometer must be numbers.")
         return
 
-    make_model = ' '.join(make_model_parts)
-    make_model_split = make_model.split(maxsplit=1)
-    make = make_model_split[0] if make_model_split else "Unknown"
-    model = make_model_split[1] if len(make_model_split) > 1 else "Unknown"
+    make = args[2]
+    model = args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
     await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
