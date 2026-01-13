@@ -62,19 +62,27 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
     if len(args) < 5:
-        await update.message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
+        await update.message.reply_text(
+            "Exact format required:\n"
+            "/vehicle add <Plate> <Year> <Make> <Model> <Odometer>\n\n"
+            "Example:\n"
+            "/vehicle add WZP484 2014 Chevy Cruze 60675\n"
+            "(Make and Model can be one or two words, Odometer must be last)"
+        )
         return
 
-    plate = args[0]
+    plate = args[0].upper()
     try:
         year = int(args[1])
-        odometer = int(args[4])
+        odometer = int(args[-1])  # always take last arg as odometer
     except ValueError:
-        await update.message.reply_text("Year and Odometer must be numbers.")
+        await update.message.reply_text("Year (2nd) and Odometer (last) must be numbers.\nCheck for extra spaces or typos.")
         return
 
+    # Make = 3rd arg, Model = everything between year and odometer
     make = args[2]
-    model = args[3]
+    model_parts = args[3:-1]  # all between make and odometer
+    model = ' '.join(model_parts) if model_parts else "Unknown"
 
     add_vehicle(user_id, plate, year, make, model, odometer)
     await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
