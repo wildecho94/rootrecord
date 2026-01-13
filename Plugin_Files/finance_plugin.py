@@ -1,10 +1,10 @@
 # Plugin_Files/finance_plugin.py
-# Version: 20260113 – Finance with auto-categories, balance/networth
+# Version: 20260113 – Single shared table, auto-categories
 
 """
-Finance plugin – central /finance command + sub-operations
-All finance data in ONE table: finance_records
-Categories auto-added on first use
+Finance plugin – /finance command + sub-operations
+All data in ONE table: finance_records
+Categories auto-created on first use
 """
 
 import sqlite3

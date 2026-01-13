@@ -182,7 +182,6 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     odometer = None
     if is_full:
-        # Prompt for odometer if not provided in message
         if len(args) > 4 and args[-2].isdigit():
             odometer = int(args[-2])
         else:

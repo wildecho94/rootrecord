@@ -1,12 +1,12 @@
 # Plugin_Files/geopy_plugin.py
-# Version: 20260113 – Geopy enrichment (separate table, original timestamps)
+# Version: 20260113 – Separate enrichment table, original timestamps preserved
 
 """
-Geopy plugin – reverse geocoding + distance between pings
-All enriched data saved SEPARATELY in geopy_enriched
+Geopy plugin – reverse geocoding + distance
+All enriched data saved SEPARATELY (geopy_enriched table)
 Uses original raw timestamp from gps_records
-received_at = when enrichment ran (processing time)
-No deletion of raw gps_records rows
+received_at = when enrichment ran
+No deletion/grouping of raw gps_records rows
 """
 
 import sqlite3
@@ -15,7 +15,6 @@ from pathlib import Path
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 
-# Paths & Config
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 USER_AGENT = "RootRecordBot/1.0 (contact: wildecho94@gmail.com)"
@@ -48,7 +47,6 @@ def init_db():
 def enrich_ping(ping_id: int, lat: float, lon: float, original_timestamp: str, prev_lat=None, prev_lon=None):
     print(f"[geopy] Enriching ping {ping_id}: ({lat:.6f}, {lon:.6f}) @ {original_timestamp}")
 
-    # Reverse geocode
     try:
         location = geolocator.reverse((lat, lon), exactly_one=True, timeout=10)
         if location:
@@ -62,13 +60,11 @@ def enrich_ping(ping_id: int, lat: float, lon: float, original_timestamp: str, p
         print(f"[geopy] Geocoding error: {e}")
         address = city = country = 'Geopy failed'
 
-    # Distance
     distance_m = None
     if prev_lat is not None and prev_lon is not None:
         distance_m = geodesic((prev_lat, prev_lon), (lat, lon)).meters
         print(f"[geopy] Distance from previous: {distance_m:.0f} m")
 
-    # Save (original timestamp preserved)
     try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
