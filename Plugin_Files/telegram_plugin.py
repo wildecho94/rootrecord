@@ -92,7 +92,6 @@ def save_gps_record(update: Update):
     loc = msg.location
     user = msg.from_user
 
-    # Use already-parsed datetime objects directly
     if update.edited_message and msg.edit_date:
         ping_time = msg.edit_date.isoformat()
         ping_type = "EDIT (live ping)"
@@ -209,6 +208,7 @@ async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ────────────────────────────────────────────────
 def register_new_plugins(application: Application):
     print("[telegram_plugin] Registering new plugins...")
+
     # Finance plugin
     try:
         from Plugin_Files.finance_plugin import finance
@@ -217,19 +217,26 @@ def register_new_plugins(application: Application):
     except ImportError as e:
         print(f"[telegram_plugin] Finance plugin not found: {e}")
 
-    # Vehicles plugin (full suite)
+    # Vehicles plugin (management only – no fillup)
     try:
-        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_fillup, cmd_mpg, callback_vehicle_menu, callback_fill, handle_fillup_input
+        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_mpg, callback_vehicle_menu
         application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))
         application.add_handler(CommandHandler("vehicles", cmd_vehicles))
-        application.add_handler(CommandHandler("fillup", cmd_fillup))
         application.add_handler(CommandHandler("mpg", cmd_mpg))
         application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
-        application.add_handler(CallbackQueryHandler(callback_fill, pattern="^veh_fill_"))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_fillup_input))
-        print("[telegram_plugin] Vehicles commands + buttons registered")
+        print("[telegram_plugin] Vehicles management registered")
     except ImportError as e:
-        print(f"[telegram_plugin] Vehicles plugin not found: {e}")
+        print(f"[telegram_plugin] Vehicles management import failed: {e}")
+
+    # Fillup plugin (isolated – owns /fillup now)
+    try:
+        from Plugin_Files.fillup_plugin import cmd_fillup, callback_fillup_confirm, handle_fillup_input
+        application.add_handler(CommandHandler("fillup", cmd_fillup))
+        application.add_handler(CallbackQueryHandler(callback_fillup_confirm, pattern="^fillup_confirm_|^fillup_cancel"))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_fillup_input))
+        print("[telegram_plugin] Fillup plugin registered")
+    except ImportError as e:
+        print(f"[telegram_plugin] Fillup plugin import failed: {e}")
 
     # Geopy is auto-called from handle_location (no command needed)
 
