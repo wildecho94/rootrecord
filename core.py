@@ -54,4 +54,98 @@ def clear_pycache_folders():
         pycache = folder / "__pycache__"
         if pycache.exists():
             shutil.rmtree(pycache)
-            log_debug(f"Removed __pycache__:
+            log_debug(f"Removed __pycache__: {pycache}")
+            cleared += 1
+    log_debug(f"Cleared {cleared} __pycache__ folder(s)")
+
+def backup_system():
+    now = datetime.now()
+    backup_name = f"startup_{now.strftime('%Y%m%d_%H%M%S')}"
+    backup_dir = BACKUPS_FOLDER / backup_name
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    log_debug(f"Starting backup → {backup_dir}")
+
+    for name, folder in FOLDERS.items():
+        if folder.exists():
+            dest = backup_dir / name
+            shutil.copytree(folder, dest, ignore=shutil.ignore_patterns('*.zip'))
+            log_debug(f"  Backed up {name} (skipped .zip files)")
+    if DATA_FOLDER.exists():
+        data_dest = backup_dir / "data"
+        shutil.copytree(DATA_FOLDER, data_dest, ignore=shutil.ignore_patterns('*.zip'))
+        log_debug(f"  Backed up data folder (database + skipped .zip)")
+    log_debug("Backup completed")
+
+def prepare_folders():
+    for folder in FOLDERS.values():
+        folder.mkdir(exist_ok=True)
+        log_debug(f"✓ {folder.name}")
+
+plugins = {}
+
+def discover_plugins():
+    plugins = {}
+    for folder in FOLDERS.values():
+        for path in folder.glob("*.py"):
+            if path.name.startswith('__'):
+                continue
+
+            name = path.stem
+            module_name = f"{folder.name}.{name}"
+
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                if hasattr(module, "initialize"):
+                    plugins[name] = module
+                    log_debug(f"{name} → initialize() found (path: {path})")
+                else:
+                    log_debug(f"{name} → skipped (no initialize())")
+            except Exception as e:
+                log_debug(f"Failed to load {path.name}: {e}")
+
+    log_debug(f"────────────────────────────────────────────────────────────\n")
+    log_debug(f"Total plugins loaded: {len(plugins)}\n")
+
+    return plugins
+
+def auto_run_plugins(plugins):
+    for name, module in plugins.items():
+        try:
+            if hasattr(module, "initialize"):
+                module.initialize()
+            log_debug(f"→ {name} initialized")
+        except Exception as e:
+            log_debug(f"Failed to auto-run {name}: {e}")
+
+def initialize_system():
+    os.system('cls' if os.name == 'nt' else 'clear')
+    now = datetime.now()
+    log_debug(f"rootrecord system starting at {now.isoformat()}...")
+
+    clear_pycache_folders()
+    backup_system()
+    prepare_folders()
+
+    plugins = discover_plugins()
+    auto_run_plugins(plugins)
+
+    log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
+
+async def main_loop():
+    log_debug("[core] Main asyncio loop running - all background tasks active")
+    while True:
+        await asyncio.sleep(60)
+
+if __name__ == "__main__":
+    initialize_system()
+    log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
+
+    try:
+        asyncio.run(main_loop())
+    except KeyboardInterrupt:
+        log_debug("\nShutting down RootRecord...")
+        sys.exit(0)
