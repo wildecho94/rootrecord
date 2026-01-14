@@ -5,50 +5,12 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-import time
+from telegram.ext import CommandHandler, ContextTypes
 
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
-def table_exists(table_name):
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        c = conn.cursor()
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
-        return c.fetchone() is not None
-
-def init_db():
-    if table_exists("finance_records"):
-        print("[finance_plugin] finance_records table already exists – skipping creation")
-    else:
-        print("[finance_plugin] Creating finance_records table...")
-        with sqlite3.connect(DB_PATH, timeout=10) as conn:
-            c = conn.cursor()
-            c.execute('''
-                CREATE TABLE finance_records (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    type TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    description TEXT,
-                    category TEXT DEFAULT 'Uncategorized',
-                    timestamp TEXT NOT NULL,
-                    received_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            conn.commit()
-
-    # Check/add vehicle_id column
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        c = conn.cursor()
-        try:
-            c.execute("ALTER TABLE finance_records ADD COLUMN vehicle_id INTEGER")
-            print("[finance_plugin] Added vehicle_id column")
-        except sqlite3.OperationalError:
-            pass  # already exists
-        c.execute('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)')
-        conn.commit()
-
-    print("[finance_plugin] Finance table ready")
+# No init_db() needed since table already exists
 
 def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
@@ -114,5 +76,4 @@ async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Unknown operation. Use expense, income, debt, asset, balance, networth.")
 
 def initialize():
-    init_db()
-    print("[finance_plugin] Initialized – /finance ready")
+    print("[finance_plugin] Initialized – /finance ready (table already exists)")
