@@ -1,5 +1,5 @@
 # Plugin_Files/totals_plugin.py
-# Version: 1.42.20260114 – Absolute totals updater
+# Version: 1.42.20260114 – Absolute totals updater (creates missing tables gracefully)
 
 import sqlite3
 import json
@@ -15,57 +15,117 @@ ROOT = Path(config["root_folder"])
 DB_PATH = ROOT / config["master_db"]
 TOTALS_JSON = ROOT / "web" / "totals.json"
 
+def init_tables():
+    """Create missing tables if they don't exist (minimal schema)"""
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        # pings (example minimal)
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS pings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                timestamp TEXT
+            )
+        ''')
+        # vehicles
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS vehicles (
+                vehicle_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                plate TEXT
+            )
+        ''')
+        # fuel_records
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS fuel_records (
+                fill_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                vehicle_id INTEGER
+            )
+        ''')
+        # finance_records
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS finance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER
+            )
+        ''')
+        # activity_sessions
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS activity_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER
+            )
+        ''')
+        conn.commit()
+    print("[totals_plugin] Checked/created missing tables")
+
 def calculate_totals():
+    init_tables()  # Ensure tables exist before counting
+
+    totals = {
+        "users": 0,
+        "pings": 0,
+        "vehicles": 0,
+        "fillups": 0,
+        "finance_entries": 0,
+        "activities": 0,
+        "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
 
-        # Total unique users
-        c.execute("SELECT COUNT(DISTINCT user_id) FROM pings")
-        total_users = c.fetchone()[0] or 0
+        try:
+            c.execute("SELECT COUNT(DISTINCT user_id) FROM pings")
+            totals["users"] = c.fetchone()[0] or 0
+        except sqlite3.OperationalError as e:
+            print(f"[totals_plugin] pings table missing/skipped: {e}")
 
-        # Total pings
-        c.execute("SELECT COUNT(*) FROM pings")
-        total_pings = c.fetchone()[0] or 0
+        try:
+            c.execute("SELECT COUNT(*) FROM pings")
+            totals["pings"] = c.fetchone()[0] or 0
+        except sqlite3.OperationalError as e:
+            print(f"[totals_plugin] pings table missing/skipped: {e}")
 
-        # Total vehicles
-        c.execute("SELECT COUNT(*) FROM vehicles")
-        total_vehicles = c.fetchone()[0] or 0
+        try:
+            c.execute("SELECT COUNT(*) FROM vehicles")
+            totals["vehicles"] = c.fetchone()[0] or 0
+        except sqlite3.OperationalError as e:
+            print(f"[totals_plugin] vehicles table missing/skipped: {e}")
 
-        # Total fill-ups
-        c.execute("SELECT COUNT(*) FROM fuel_records")
-        total_fillups = c.fetchone()[0] or 0
+        try:
+            c.execute("SELECT COUNT(*) FROM fuel_records")
+            totals["fillups"] = c.fetchone()[0] or 0
+        except sqlite3.OperationalError as e:
+            print(f"[totals_plugin] fuel_records table missing/skipped: {e}")
 
-        # Total finance entries
-        c.execute("SELECT COUNT(*) FROM finance_records")
-        total_finance = c.fetchone()[0] or 0
+        try:
+            c.execute("SELECT COUNT(*) FROM finance_records")
+            totals["finance_entries"] = c.fetchone()[0] or 0
+        except sqlite3.OperationalError as e:
+            print(f"[totals_plugin] finance_records table missing/skipped: {e}")
 
-        # Total activities
-        c.execute("SELECT COUNT(*) FROM activity_sessions")
-        total_activities = c.fetchone()[0] or 0
+        try:
+            c.execute("SELECT COUNT(*) FROM activity_sessions")
+            totals["activities"] = c.fetchone()[0] or 0
+        except sqlite3.OperationalError as e:
+            print(f"[totals_plugin] activity_sessions table missing/skipped: {e}")
 
-    totals = {
-        "users": total_users,
-        "pings": total_pings,
-        "vehicles": total_vehicles,
-        "fillups": total_fillups,
-        "finance_entries": total_finance,
-        "activities": total_activities,
-        "updated_at": datetime.utcnow().isoformat()
-    }
-
-    # Write to JSON for index.html
+    # Write to JSON
     with open(TOTALS_JSON, "w", encoding="utf-8") as f:
         json.dump(totals, f, indent=2)
 
     print(f"[totals_plugin] Totals updated: {totals}")
+    return totals
 
 def totals_loop():
     while True:
         try:
             calculate_totals()
         except Exception as e:
-            print(f"[totals_plugin] Error: {e}")
-        time.sleep(60)  # every minute
+            print(f"[totals_plugin] Loop error: {e}")
+        time.sleep(60)
 
 def initialize():
     thread = threading.Thread(target=totals_loop, daemon=True, name="TotalsUpdater")
