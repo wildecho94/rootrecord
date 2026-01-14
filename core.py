@@ -11,6 +11,7 @@ from datetime import datetime
 import sqlite3
 import importlib.util
 import asyncio
+import time
 
 # Save original connect to avoid recursion
 _original_connect = sqlite3.connect
@@ -114,12 +115,25 @@ def discover_plugins():
 
 def auto_run_plugins(plugins):
     for name, module in plugins.items():
-        try:
-            if hasattr(module, "initialize"):
-                module.initialize()
-            log_debug(f"→ {name} initialized")
-        except Exception as e:
-            log_debug(f"Failed to auto-run {name}: {e}")
+        max_attempts = 100
+        for attempt in range(max_attempts):
+            try:
+                if hasattr(module, "initialize"):
+                    module.initialize()
+                log_debug(f"→ {name} initialized")
+                break  # success
+            except Exception as e:
+                error_str = str(e).lower()
+                if "database is locked" in error_str or "unable to open database file" in error_str:
+                    if attempt < max_attempts - 1:
+                        log_debug(f"[retry] {name} failed (attempt {attempt+1}/{max_attempts}): {e} - retrying in 3s...")
+                        time.sleep(3)
+                        continue
+                    else:
+                        log_debug(f"Failed to auto-run {name} after {max_attempts} attempts: {e}")
+                else:
+                    log_debug(f"Failed to auto-run {name}: {e}")
+                    break  # non-lock error, no retry
 
 def initialize_system():
     os.system('cls' if os.name == 'nt' else 'clear')
