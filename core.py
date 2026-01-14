@@ -32,7 +32,6 @@ PLUGIN_FOLDER  = BASE_DIR / "Plugin_Files"
 
 FOLDERS = {
     "core":    CORE_FOLDER,
-    "handler": HANDLER_FOLDER,
     "plugin":  PLUGIN_FOLDER
 }
 

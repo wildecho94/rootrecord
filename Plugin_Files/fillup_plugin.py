@@ -11,7 +11,10 @@ ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def initialize():
-    print("[fillup_plugin] Initialized – /fillup ready")
+    print("[finance_plugin] Waiting 5s before DB init to avoid startup lock...")
+    time.sleep(5)  # Give time for polling/enrichment threads to settle
+    init_db()
+    print("[finance_plugin] Initialized – /finance ready")
 
 async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
