@@ -2,8 +2,8 @@
 # RootRecord Web Dashboard – v1.42.20260114
 
 from flask import Flask, send_from_directory, jsonify
-import json
 import sqlite3
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -18,21 +18,27 @@ def calculate_totals():
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
 
+            # Total unique users
             c.execute("SELECT COUNT(DISTINCT user_id) FROM pings")
             total_users = c.fetchone()[0] or 0
 
+            # Total pings
             c.execute("SELECT COUNT(*) FROM pings")
             total_pings = c.fetchone()[0] or 0
 
+            # Total vehicles
             c.execute("SELECT COUNT(*) FROM vehicles")
             total_vehicles = c.fetchone()[0] or 0
 
+            # Total fill-ups
             c.execute("SELECT COUNT(*) FROM fuel_records")
             total_fillups = c.fetchone()[0] or 0
 
+            # Total finance entries
             c.execute("SELECT COUNT(*) FROM finance_records")
             total_finance = c.fetchone()[0] or 0
 
+            # Total activities
             c.execute("SELECT COUNT(*) FROM activity_sessions")
             total_activities = c.fetchone()[0] or 0
 
@@ -43,17 +49,15 @@ def calculate_totals():
             "fillups": total_fillups,
             "finance_entries": total_finance,
             "activities": total_activities,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        # Create/write JSON
+        # Create/update JSON file
         with open(TOTALS_JSON, "w", encoding="utf-8") as f:
             json.dump(totals, f, indent=2)
 
-        print(f"[app] Created/updated totals.json: {totals}")
         return totals
     except Exception as e:
-        print(f"[app] Error calculating totals: {e}")
         return {"error": str(e)}
 
 @app.route('/')
@@ -63,7 +67,6 @@ def index():
 @app.route('/totals.json')
 def totals():
     if not TOTALS_JSON.exists():
-        # Create on first request if missing
         print("[app] totals.json not found – generating now")
         return jsonify(calculate_totals())
 
@@ -72,7 +75,6 @@ def totals():
             data = json.load(f)
         return jsonify(data)
     except Exception as e:
-        # Regenerate if corrupted
         print(f"[app] Error reading totals.json: {e} – regenerating")
         return jsonify(calculate_totals())
 
