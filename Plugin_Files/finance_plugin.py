@@ -11,39 +11,43 @@ import time
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
-def create_base_table():
-    print("[finance_plugin] Creating base finance_records table...")
+def table_exists(table_name):
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS finance_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                type TEXT NOT NULL,          -- expense, income, debt, asset
-                amount REAL NOT NULL,
-                description TEXT,
-                category TEXT DEFAULT 'Uncategorized',
-                timestamp TEXT NOT NULL,
-                received_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        return c.fetchone() is not None
 
-def add_vehicle_column():
-    print("[finance_plugin] Checking/adding vehicle_id column...")
+def init_db():
+    if table_exists("finance_records"):
+        print("[finance_plugin] finance_records table already exists – skipping creation")
+    else:
+        print("[finance_plugin] Creating finance_records table...")
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE finance_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    description TEXT,
+                    category TEXT DEFAULT 'Uncategorized',
+                    timestamp TEXT NOT NULL,
+                    received_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+
+    # Check/add vehicle_id column
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         try:
             c.execute("ALTER TABLE finance_records ADD COLUMN vehicle_id INTEGER")
-            print("[finance_plugin] Added vehicle_id column to finance_records")
+            print("[finance_plugin] Added vehicle_id column")
         except sqlite3.OperationalError:
-            pass  # column already exists
+            pass  # already exists
         c.execute('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)')
         conn.commit()
 
-def init_db():
-    create_base_table()
-    time.sleep(2)  # small delay before ALTER to reduce lock chance
-    add_vehicle_column()
     print("[finance_plugin] Finance table ready")
 
 def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
@@ -74,9 +78,7 @@ def get_networth():
         return assets - liabilities
 
 async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     args = context.args
-
     if not args:
         await update.message.reply_text("Usage: /finance <operation> [amount] [description] [category]\nOperations: expense, income, debt, asset, balance, networth")
         return
@@ -112,7 +114,5 @@ async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Unknown operation. Use expense, income, debt, asset, balance, networth.")
 
 def initialize():
-    print("[finance_plugin] Waiting 15s before DB init to avoid startup lock...")
-    time.sleep(15)
     init_db()
     print("[finance_plugin] Initialized – /finance ready")
