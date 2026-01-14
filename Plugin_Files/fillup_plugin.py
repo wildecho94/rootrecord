@@ -2,6 +2,7 @@
 # Simple fill-up: gallons + price + optional odometer → confirm vehicle → save
 
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
