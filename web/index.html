@@ -109,7 +109,7 @@
     <script>
         async function loadStats() {
             try {
-                const r = await fetch('/server_stats.json');
+                const r = await fetch('/totals.json');
                 const d = await r.json();
                 document.getElementById('users').textContent = d.users || '—';
                 document.getElementById('pings').textContent = (d.pings || 0).toLocaleString();
