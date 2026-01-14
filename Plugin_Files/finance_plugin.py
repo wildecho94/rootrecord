@@ -6,15 +6,15 @@ from datetime import datetime
 from pathlib import Path
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+import time
 
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
-def init_db():
-    print("[finance_plugin] Creating/updating finance_records table...")
+def create_base_table():
+    print("[finance_plugin] Creating base finance_records table...")
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
-        # Base table
         c.execute('''
             CREATE TABLE IF NOT EXISTS finance_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +26,12 @@ def init_db():
                 received_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        # Add vehicle_id column if missing (for fuel expenses)
+        conn.commit()
+
+def add_vehicle_column():
+    print("[finance_plugin] Checking/adding vehicle_id column...")
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        c = conn.cursor()
         try:
             c.execute("ALTER TABLE finance_records ADD COLUMN vehicle_id INTEGER")
             print("[finance_plugin] Added vehicle_id column to finance_records")
@@ -34,6 +39,12 @@ def init_db():
             pass  # column already exists
         c.execute('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)')
         conn.commit()
+
+def init_db():
+    create_base_table()
+    # Delay ALTER slightly to avoid lock race
+    time.sleep(2)
+    add_vehicle_column()
     print("[finance_plugin] Finance table ready")
 
 def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
@@ -64,9 +75,7 @@ def get_networth():
         return assets - liabilities
 
 async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     args = context.args
-
     if not args:
         await update.message.reply_text("Usage: /finance <operation> [amount] [description] [category]\nOperations: expense, income, debt, asset, balance, networth")
         return
