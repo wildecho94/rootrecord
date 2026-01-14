@@ -1,0 +1,54 @@
+### Project Overview
+RootRecord is a Telegram bot integrated with a lightweight web dashboard for tracking GPS locations, vehicle management, fuel logging, MPG statistics, and personal finance. It's in beta (v1.42.20260114), with a focus on finance, fill-up, and MPG features as highest priority. The project structure includes core files for system initialization and scheduling, handler and plugin folders for modular extensions, a web component for the dashboard, and data/backups/logs for persistence. The GitHub release (tagged 20260114, dated January 14, 2026) describes it as a "checkpoint release" – a snapshot of the working state, with stable bot core but incomplete elements. No assets are provided in the release; it's commit-based (hash: 888f45ec55e8f455a0d7dde3988a0bff749e1114). The repository is owned by wildecho94, and the release emphasizes that nothing is marked "complete" due to known gaps.
+
+### Code Structure and Components
+- **Core System (core.py, scheduler.py, plugins_core.py, handler_core.py):**
+  - core.py handles startup: clears __pycache__, backs up folders (core, handler, plugin, data; skips .zip), prepares directories, discovers and auto-runs plugins via initialize() methods. It runs an asyncio main loop for background tasks.
+  - scheduler.py manages periodic tasks in the asyncio loop; registers coroutines with intervals, handles errors, and cancels on shutdown.
+  - plugins_core.py and handler_core.py ensure their respective folders exist with __init__.py, but contain no further logic.
+  - Paths are hardcoded (e.g., DB at data/rootrecord.db), which could break if relocated.
+
+- **Telegram Bot (telegram_plugin.py, commands folder):**
+  - telegram_plugin.py: Loads config from config_telegram.json (token present), initializes DB for gps_records (with user details, lat/lon, timestamp). Registers commands dynamically via load_commands (from commands/*_cmd.py), adds handlers for locations (new/edited), and global message logging. Polling starts with drop_pending_updates=True, poll_interval=0.5s. Uses threading for background launch.
+  - Commands: start_cmd.py (/start greeting), cmd_loader.py (dynamic loader), __init__.py (package marker).
+  - Issues: Potential duplicate polling from multiple instances causing "terminated by other getUpdates" errors.
+
+- **Plugins (Plugin_Files):**
+  - **finance_plugin.py:** Manages finance_records table (type: expense/income/debt/asset; adds vehicle_id). /finance command logs entries, views balance/networth. Auto-categorizes; integrates with fuel logs.
+  - **fillup_plugin.py:** /fillup prompts for input (gallons, price, optional odometer for full tank). Handles vehicle selection via buttons, saves to fuel_records (with is_full_tank), and auto-logs expense to finance_records.
+  - **vehicles_plugin.py:** vehicles table; /vehicle add/list/delete/edit commands with buttons. Integrates MPG calc using full tanks and initial_odometer as baseline.
+  - **mpg_plugin.py:** Dedicated /mpg; calculates last/avg MPG per vehicle from full tanks only (ignores partials between them, leading to inaccurate totals).
+  - **geopy_plugin.py:** Enriches gps_records in separate geopy_enriched table (address, city, country, distance); preserves original timestamps.
+  - **uptime_plugin.py:** Tracks events in uptime_records (start/stop/crash), calculates lifetime uptime %; periodic prints/saves to uptime_stats; /uptime command.
+  - **totals_plugin.py:** Crashes on auto-run ("create_totals_table not defined" – typo, should be create_totals_history_table). Intended to save periodic snapshots to dashboard_totals_history (users, pings, vehicles, etc.), but fails; hardcoded DB path.
+  - **blank_plugin.py:** Empty template.
+  - All plugins use hardcoded DB paths; most have init_db() for tables.
+
+- **Web Dashboard (web/app.py, index.html, tunnel.py, cloudflared-config.yml):**
+  - app.py: Flask serves index.html at / and /totals.json (reads latest from dashboard_totals_history; returns error if empty/missing).
+  - index.html: Static landing with login button (dummy), tutorial (mentions /web command), stats cards (users, pings, uptime, activities; fetched via JS from /totals.json, refreshes every 30s).
+  - tunnel.py: Manages Cloudflare Tunnel via cloudflared.exe; starts in thread, watches process, uses .tunnel.lock for pid check. Config routes domains (dashboard.rootrecord.info, etc.) to localhost:5000.
+  - totals.json: Sample data (hardcoded zeros/low numbers).
+  - Issues: Stats show "—"/"N/A" due to empty/missing tables or totals_plugin crash; public URLs often 502 (Flask instability); no real login (/web unimplemented).
+
+- **Other Files:**
+  - debug_rootrecord.log: Startup log (backups, pycache clear, plugins load; totals_plugin fails; tunnel initializes; bot runs).
+  - start_rootrecord.bat: Clears console, runs publish_rootrecord.py (not provided), starts web/tunnel in new window, then core.py.
+  - README.md: Matches GitHub notes; prioritizes finance/fill-up/MPG; lists issues (dupe polling, Flask 502, stats broken, MPG partials ignored, no login, hardcoded paths).
+  - .gitignore: Ignores pycache, envs, logs/backups/data, configs.
+  - config_telegram.json: Token and settings (DM enabled, others disabled).
+
+### Current State and Functionality
+- **Working Elements (from log/GitHub):** 10 plugins load/initialize (except totals_plugin crash). Bot polls actively; commands (/fillup, /vehicles, /mpg, /finance) respond in chat. Tunnel connects (4 edges), proxies domains. Flask starts via bat, serves index.html. Finance/fill-up/vehicles integrate (e.g., fill-up logs expense).
+- **Data Flow:** DB (rootrecord.db) central; tables created on init (gps_records, finance_records, fuel_records, vehicles, geopy_enriched, uptime_records/stats, dashboard_totals_history). Pings enrich via geopy; fill-ups trigger finance/MPG.
+- **Performance:** Periodic tasks (scheduler, uptime prints every 60s, totals every 60s – but broken). No crashes in log.
+
+### Key Issues and Gaps
+- **MPG Inaccuracy:** mpg_plugin.py and vehicles_plugin.py only use full tanks; partials between (e.g., odometers 60812 to 62727) skip miles/gallons, underreporting MPG.
+- **Stats/Dashboard Broken:** totals_plugin crash prevents updates; missing tables (pings, activity_sessions) cause zeros; /totals.json 503/empty.
+- **Polling Conflicts:** Multiple bot instances lead to getUpdates errors.
+- **Web Stability:** Flask refuses connections; public 502s; no user-specific data (global totals); dummy login only.
+- **DB/Schema:** Silent failures on missing tables; no auto-creation for all (e.g., activity_sessions).
+- **Hardcoding:** Paths (DB, cloudflared) limit portability; clutter from multiple windows.
+- **Unimplemented:** /web for login links; per-user web filtering; error feedback on web; activity tracking (total_activities always 0).
+- **GitHub Alignment:** Release notes mirror provided summary/log; emphasizes checkpoint nature, with finance/fill-up stable but MPG/web needing fixes. No assets mean no binaries – source-only.
