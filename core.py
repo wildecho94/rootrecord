@@ -9,7 +9,6 @@ import shutil
 import os
 from datetime import datetime
 import sqlite3
-sqlite3.connect = lambda *args, **kwargs: sqlite3.connect(*args, timeout=10, **kwargs)  # 10-second wait before fail
 import importlib.util
 import asyncio
 
