@@ -12,13 +12,15 @@ import sqlite3
 import importlib.util
 import asyncio
 
-# Enable WAL mode globally for better concurrency
+# Save original connect to avoid recursion
+_original_connect = sqlite3.connect
+
 def connect_with_wal(*args, **kwargs):
-    conn = sqlite3.connect(*args, **kwargs)
+    conn = _original_connect(*args, **kwargs)
     conn.execute("PRAGMA journal_mode=WAL;")
     return conn
 
-# Replace default connect (safe, no lambda conflict)
+# Safe override
 sqlite3.connect = connect_with_wal
 
 BASE_DIR = Path(__file__).parent
@@ -81,8 +83,6 @@ def prepare_folders():
     for folder in FOLDERS.values():
         folder.mkdir(exist_ok=True)
         log_debug(f"✓ {folder.name}")
-
-plugins = {}
 
 def discover_plugins():
     plugins = {}
