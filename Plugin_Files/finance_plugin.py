@@ -12,7 +12,7 @@ DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def init_db():
     print("[finance_plugin] Creating/updating finance_records table...")
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         # Base table
         c.execute('''
@@ -37,30 +37,42 @@ def init_db():
     print("[finance_plugin] Finance table ready")
 
 def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute('''
             INSERT INTO finance_records (type, amount, description, category, timestamp, vehicle_id)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (type_, amount, desc, cat, datetime.utcnow().isoformat(), vehicle_id))
         conn.commit()
-    print(f"[finance] Logged {type_}: ${amount:.2f} - {desc}")
 
-async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def get_balance():
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        c = conn.cursor()
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
+        income = c.fetchone()[0] or 0
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
+        expense = c.fetchone()[0] or 0
+        return income - expense
+
+def get_networth():
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        c = conn.cursor()
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income' OR type = 'asset'")
+        assets = c.fetchone()[0] or 0
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense' OR type = 'debt'")
+        liabilities = c.fetchone()[0] or 0
+        return assets - liabilities
+
+async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     args = context.args
+
     if not args:
-        await update.message.reply_text(
-            "Usage:\n"
-            "/finance expense <amount> <desc> [category]\n"
-            "/finance income <amount> <desc> [category]\n"
-            "/finance debt <amount> <desc> [category]\n"
-            "/finance asset <amount> <desc> [category]\n"
-            "/finance balance\n"
-            "/finance networth"
-        )
+        await update.message.reply_text("Usage: /finance <operation> [amount] [description] [category]\nOperations: expense, income, debt, asset, balance, networth")
         return
 
     sub = args[0].lower()
+
     if sub in ('balance', 'networth'):
         if sub == 'balance':
             bal = get_balance()
@@ -88,24 +100,6 @@ async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"{sub.capitalize()} of ${amount:.2f} logged: {desc}")
     else:
         await update.message.reply_text("Unknown operation. Use expense, income, debt, asset, balance, networth.")
-
-def get_balance():
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
-        income = c.fetchone()[0] or 0
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
-        expense = c.fetchone()[0] or 0
-        return income - expense
-
-def get_networth():
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income' OR type = 'asset'")
-        assets = c.fetchone()[0] or 0
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense' OR type = 'debt'")
-        liabilities = c.fetchone()[0] or 0
-        return assets - liabilities
 
 def initialize():
     init_db()

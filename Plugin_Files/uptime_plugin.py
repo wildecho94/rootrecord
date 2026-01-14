@@ -3,10 +3,6 @@
 
 """
 Uptime plugin – single-file, reliable lifetime tracking
-
-Tracks start/stop/crash events, calculates true uptime percentage across all runs.
-Prints stats every 60s in yellow + saves snapshot to uptime_stats table.
-Handles crashes/restarts properly (unpaired start = still running).
 """
 
 import threading
@@ -132,26 +128,29 @@ def periodic_update():
         save_stats_snapshot(stats)
         time.sleep(60)
 
-init_db()
+def initialize():
+    print("[uptime_plugin] Initializing...")
+    init_db()
 
-# Record start on every launch
-with sqlite3.connect(DB_PATH, timeout=10) as conn:
-    conn.execute(
-        "INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
-        ("start", datetime.utcnow().isoformat())
-    )
-    conn.commit()
+    # Record start (now safe inside initialize)
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+        conn.execute(
+            "INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
+            ("start", datetime.utcnow().isoformat())
+        )
+        conn.commit()
 
-# Initial print + save
-s = calculate_uptime_stats()
-print_uptime_stats(s)
-save_stats_snapshot(s)
+    # Initial print + save
+    s = calculate_uptime_stats()
+    print_uptime_stats(s)
+    save_stats_snapshot(s)
 
-# Start periodic thread
-thread = threading.Thread(target=periodic_update, daemon=True)
-thread.start()
+    # Start periodic thread
+    thread = threading.Thread(target=periodic_update, daemon=True)
+    thread.start()
+    print("[uptime_plugin] Periodic thread started (every 60s)")
 
-# Graceful shutdown: record stop/crash
+# Graceful shutdown
 def on_shutdown():
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH, timeout=10) as conn:

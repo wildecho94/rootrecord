@@ -7,12 +7,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Changed: use relative path like other plugins (no more hardcoded C:/Users/...)
 ROOT = Path(__file__).parent.parent.parent  # Plugin_Files → root
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def create_totals_history_table():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS dashboard_totals_history (
@@ -33,7 +32,7 @@ def create_totals_history_table():
 
 def save_totals_to_db(totals):
     timestamp = datetime.utcnow().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute('''
             INSERT INTO dashboard_totals_history (
@@ -50,7 +49,7 @@ def save_totals_to_db(totals):
             totals["total_finance_entries"],
             totals["total_activities"],
             "periodic",
-            None  # notes field – can be used later
+            None
         ))
         conn.commit()
     print(f"[totals_plugin] Saved snapshot at {timestamp}")
@@ -65,7 +64,7 @@ def calculate_and_save_totals():
         "total_activities": 0
     }
 
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
 
         try: c.execute("SELECT COUNT(DISTINCT user_id) FROM pings"); totals["total_users"] = c.fetchone()[0] or 0
@@ -95,7 +94,7 @@ def totals_loop():
             calculate_and_save_totals()
         except Exception as e:
             print(f"[totals_plugin] Loop error: {e}")
-        time.sleep(60)  # every minute
+        time.sleep(60)
 
 def initialize():
     create_totals_history_table()

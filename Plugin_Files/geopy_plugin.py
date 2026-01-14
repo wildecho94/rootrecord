@@ -23,7 +23,7 @@ geolocator = Nominatim(user_agent=USER_AGENT)
 
 def init_db():
     print("[geopy_plugin] Creating geopy_enriched table if missing...")
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS geopy_enriched (
@@ -66,7 +66,7 @@ def enrich_ping(ping_id: int, lat: float, lon: float, original_timestamp: str, p
         print(f"[geopy] Distance from previous: {distance_m:.0f} m")
 
     try:
-        with sqlite3.connect(DB_PATH) as conn:
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
             c = conn.cursor()
             c.execute('''
                 INSERT INTO geopy_enriched (
