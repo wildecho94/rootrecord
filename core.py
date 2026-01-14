@@ -81,6 +81,7 @@ def discover_plugins():
     plugins = {}
     log_debug("\nDiscovered potential plugin(s):")
 
+    # Search ALL .py files in the entire project root and subfolders
     for path in BASE_DIR.rglob("*.py"):
         if (
             path.name.startswith("__") or
