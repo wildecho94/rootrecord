@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
     # Start Cloudflare Tunnel
     try:
-        from Plugin_Files.web.tunnel import initialize as tunnel_init
+        from plugins.web.tunnel import initialize as tunnel_init
         tunnel_init()
         log_debug("[core] Cloudflare Tunnel initialized and started")
     except ImportError as e:
