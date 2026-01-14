@@ -42,8 +42,7 @@ def add_vehicle_column():
 
 def init_db():
     create_base_table()
-    # Delay ALTER slightly to avoid lock race
-    time.sleep(2)
+    time.sleep(2)  # small delay before ALTER to reduce lock chance
     add_vehicle_column()
     print("[finance_plugin] Finance table ready")
 
@@ -75,7 +74,9 @@ def get_networth():
         return assets - liabilities
 
 async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     args = context.args
+
     if not args:
         await update.message.reply_text("Usage: /finance <operation> [amount] [description] [category]\nOperations: expense, income, debt, asset, balance, networth")
         return
@@ -111,5 +112,7 @@ async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Unknown operation. Use expense, income, debt, asset, balance, networth.")
 
 def initialize():
+    print("[finance_plugin] Waiting 15s before DB init to avoid startup lock...")
+    time.sleep(15)
     init_db()
     print("[finance_plugin] Initialized – /finance ready")
