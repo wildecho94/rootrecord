@@ -1,5 +1,6 @@
 # rootrecord/web/app.py
 # RootRecord Web Dashboard – v1.42.20260114
+# Serves index.html + totals.json with real DB totals
 
 from flask import Flask, send_from_directory, jsonify
 import sqlite3
@@ -14,51 +15,65 @@ DB_PATH = ROOT / "data" / "rootrecord.db"
 TOTALS_JSON = Path("totals.json")  # rootrecord/totals.json
 
 def calculate_totals():
+    totals = {
+        "users": 0,
+        "pings": 0,
+        "vehicles": 0,
+        "fillups": 0,
+        "finance_entries": 0,
+        "activities": 0,
+        "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
     try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
 
-            # Total unique users
-            c.execute("SELECT COUNT(DISTINCT user_id) FROM pings")
-            total_users = c.fetchone()[0] or 0
+            try:
+                c.execute("SELECT COUNT(DISTINCT user_id) FROM pings")
+                totals["users"] = c.fetchone()[0] or 0
+            except sqlite3.OperationalError:
+                pass  # table missing → keep 0
 
-            # Total pings
-            c.execute("SELECT COUNT(*) FROM pings")
-            total_pings = c.fetchone()[0] or 0
+            try:
+                c.execute("SELECT COUNT(*) FROM pings")
+                totals["pings"] = c.fetchone()[0] or 0
+            except sqlite3.OperationalError:
+                pass
 
-            # Total vehicles
-            c.execute("SELECT COUNT(*) FROM vehicles")
-            total_vehicles = c.fetchone()[0] or 0
+            try:
+                c.execute("SELECT COUNT(*) FROM vehicles")
+                totals["vehicles"] = c.fetchone()[0] or 0
+            except sqlite3.OperationalError:
+                pass
 
-            # Total fill-ups
-            c.execute("SELECT COUNT(*) FROM fuel_records")
-            total_fillups = c.fetchone()[0] or 0
+            try:
+                c.execute("SELECT COUNT(*) FROM fuel_records")
+                totals["fillups"] = c.fetchone()[0] or 0
+            except sqlite3.OperationalError:
+                pass
 
-            # Total finance entries
-            c.execute("SELECT COUNT(*) FROM finance_records")
-            total_finance = c.fetchone()[0] or 0
+            try:
+                c.execute("SELECT COUNT(*) FROM finance_records")
+                totals["finance_entries"] = c.fetchone()[0] or 0
+            except sqlite3.OperationalError:
+                pass
 
-            # Total activities
-            c.execute("SELECT COUNT(*) FROM activity_sessions")
-            total_activities = c.fetchone()[0] or 0
+            try:
+                c.execute("SELECT COUNT(*) FROM activity_sessions")
+                totals["activities"] = c.fetchone()[0] or 0
+            except sqlite3.OperationalError:
+                pass
 
-        totals = {
-            "users": total_users,
-            "pings": total_pings,
-            "vehicles": total_vehicles,
-            "fillups": total_fillups,
-            "finance_entries": total_finance,
-            "activities": total_activities,
-            "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-        # Create/update JSON file
+        # Write to JSON
         with open(TOTALS_JSON, "w", encoding="utf-8") as f:
             json.dump(totals, f, indent=2)
 
+        print(f"[app] Totals updated: {totals}")
         return totals
     except Exception as e:
-        return {"error": str(e)}
+        print(f"[app] Error calculating totals: {e}")
+        return totals  # return zeros on failure
 
 @app.route('/')
 def index():

@@ -81,9 +81,7 @@ def discover_plugins():
     plugins = {}
     log_debug("\nDiscovered potential plugin(s):")
 
-    # Search ALL .py files in the entire project root and subfolders
     for path in BASE_DIR.rglob("*.py"):
-        # Skip internal files and known non-plugin locations
         if (
             path.name.startswith("__") or
             path.name == "__init__.py" or
@@ -98,7 +96,6 @@ def discover_plugins():
 
         name = path.stem
         try:
-            # Use relative module name
             rel_path = path.relative_to(BASE_DIR)
             module_name = ".".join(rel_path.with_suffix("").parts)
             spec = importlib.util.spec_from_file_location(module_name, path)
@@ -107,7 +104,6 @@ def discover_plugins():
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            # Only load as plugin if it has initialize()
             if hasattr(module, "initialize"):
                 plugins[name] = module
                 log_debug(f"{name} → initialize() found (path: {path})")
@@ -147,21 +143,11 @@ def initialize_system():
 async def main_loop():
     log_debug("[core] Main asyncio loop running - all background tasks active")
     while True:
-        await asyncio.sleep(60)  # Keep loop alive
+        await asyncio.sleep(60)
 
 if __name__ == "__main__":
     initialize_system()
     log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
-
-    # Start Cloudflare Tunnel
-    try:
-        from plugins.web.tunnel import initialize as tunnel_init
-        tunnel_init()
-        log_debug("[core] Cloudflare Tunnel initialized and started")
-    except ImportError as e:
-        log_debug(f"[core] Failed to import tunnel.py: {e}")
-    except Exception as e:
-        log_debug(f"[core] Tunnel startup error: {e}")
 
     try:
         asyncio.run(main_loop())

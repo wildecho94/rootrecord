@@ -1,11 +1,14 @@
 # Plugin_Files/totals_plugin.py
-# Version: 1.42.20260114 – Absolute totals updater (creates missing tables gracefully)
+# Version: 1.42.20260114 – Absolute totals updater
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))  # Add rootrecord/ to path
 
 import sqlite3
 import json
 import time
 import threading
-from pathlib import Path
 from datetime import datetime
 
 from utils.config_manager import load_config
