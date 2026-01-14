@@ -1,5 +1,5 @@
 # Plugin_Files/totals_plugin.py
-# Version: 1.42.20260114 – Calculates and caches absolute totals
+# Version: 1.42.20260114 – Absolute totals updater
 
 import sqlite3
 import json
@@ -14,30 +14,12 @@ config = load_config()
 ROOT = Path(config["root_folder"])
 DB_PATH = ROOT / config["master_db"]
 TOTALS_JSON = ROOT / "web" / "totals.json"
-TOTALS_TABLE = "totals_history"
-
-def init_totals_table():
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS totals_history (
-                timestamp TEXT PRIMARY KEY,
-                total_users INTEGER,
-                total_pings INTEGER,
-                total_vehicles INTEGER,
-                total_fillups INTEGER,
-                total_finance_entries INTEGER,
-                total_activities INTEGER
-            )
-        ''')
-        conn.commit()
-    print("[totals_plugin] totals_history table ready")
 
 def calculate_totals():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
 
-        # Total unique users (from pings or users table)
+        # Total unique users
         c.execute("SELECT COUNT(DISTINCT user_id) FROM pings")
         total_users = c.fetchone()[0] or 0
 
@@ -55,9 +37,9 @@ def calculate_totals():
 
         # Total finance entries
         c.execute("SELECT COUNT(*) FROM finance_records")
-        total_finance_entries = c.fetchone()[0] or 0
+        total_finance = c.fetchone()[0] or 0
 
-        # Total activities (sessions)
+        # Total activities
         c.execute("SELECT COUNT(*) FROM activity_sessions")
         total_activities = c.fetchone()[0] or 0
 
@@ -66,39 +48,26 @@ def calculate_totals():
         "pings": total_pings,
         "vehicles": total_vehicles,
         "fillups": total_fillups,
-        "finance_entries": total_finance_entries,
+        "finance_entries": total_finance,
         "activities": total_activities,
         "updated_at": datetime.utcnow().isoformat()
     }
 
-    # Save to JSON
+    # Write to JSON for index.html
     with open(TOTALS_JSON, "w", encoding="utf-8") as f:
         json.dump(totals, f, indent=2)
 
-    # Save to DB history
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            INSERT OR REPLACE INTO totals_history 
-            (timestamp, total_users, total_pings, total_vehicles, total_fillups, total_finance_entries, total_activities)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (totals["updated_at"], total_users, total_pings, total_vehicles, total_fillups, total_finance_entries, total_activities))
-        conn.commit()
-
     print(f"[totals_plugin] Totals updated: {totals}")
-    return totals
 
 def totals_loop():
     while True:
         try:
             calculate_totals()
         except Exception as e:
-            print(f"[totals_plugin] Error calculating totals: {e}")
+            print(f"[totals_plugin] Error: {e}")
         time.sleep(60)  # every minute
 
 def initialize():
-    init_totals_table()
-    # Start background thread
     thread = threading.Thread(target=totals_loop, daemon=True, name="TotalsUpdater")
     thread.start()
-    print("[totals_plugin] Initialized – totals updating every 60s")
+    print("[totals_plugin] Initialized – updating totals every 60s")
