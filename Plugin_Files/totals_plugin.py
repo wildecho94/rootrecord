@@ -5,9 +5,11 @@ import sqlite3
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
-# Hardcoded DB path (no config dependency)
-DB_PATH = "C:/Users/Alexrs94/Desktop/programfiles/rootrecord/data/rootrecord.db"
+# Changed: use relative path like other plugins (no more hardcoded C:/Users/...)
+ROOT = Path(__file__).parent.parent.parent  # Plugin_Files → root
+DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def create_totals_history_table():
     with sqlite3.connect(DB_PATH) as conn:
@@ -96,7 +98,7 @@ def totals_loop():
         time.sleep(60)  # every minute
 
 def initialize():
-    create_totals_table()
+    create_totals_history_table()
     thread = threading.Thread(target=totals_loop, daemon=True, name="TotalsUpdater")
     thread.start()
     print("[totals_plugin] Initialized – saving totals to DB every 60s")

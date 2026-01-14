@@ -6,7 +6,6 @@ Uptime plugin – single-file, reliable lifetime tracking
 
 Tracks start/stop/crash events, calculates true uptime percentage across all runs.
 Prints stats every 60s in yellow + saves snapshot to uptime_stats table.
-Adds /uptime command.
 Handles crashes/restarts properly (unpaired start = still running).
 """
 
@@ -17,21 +16,12 @@ import atexit
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-
-# ────────────────────────────────────────────────
-# Colors & Paths
-# ────────────────────────────────────────────────
 YELLOW = "\033[93m"
 RESET  = "\033[0m"
 
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
-# ────────────────────────────────────────────────
-# Database Setup
-# ────────────────────────────────────────────────
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -54,111 +44,85 @@ def init_db():
         conn.commit()
     print("[uptime_plugin] Database tables ready")
 
-# ────────────────────────────────────────────────
-# Core Logic – calculate true lifetime uptime
-# ────────────────────────────────────────────────
 def get_all_events():
     with sqlite3.connect(DB_PATH) as conn:
-        rows = conn.execute(
-            "SELECT event_type, timestamp FROM uptime_records ORDER BY id ASC"
-        ).fetchall()
-    return [(typ, datetime.fromisoformat(ts)) for typ, ts in rows]
+        c = conn.cursor()
+        c.execute("SELECT event_type, timestamp FROM uptime_records ORDER BY id ASC")
+        return c.fetchall()
 
 def calculate_uptime_stats():
     events = get_all_events()
     if not events:
-        return {"total_up_sec": 0, "total_down_sec": 0, "uptime_pct": 100.0, "status": "never_started"}
+        return {
+            'total_up_sec': 0,
+            'total_down_sec': 0,
+            'uptime_pct': 0.0,
+            'status': 'unknown',
+            'last_event_time': None
+        }
+
+    total_up = 0
+    total_down = 0
+    start_time = None
+    status = 'stopped'
+    last_event_time = None
+
+    for event_type, ts_str in events:
+        last_event_time = ts_str
+        ts = datetime.fromisoformat(ts_str)
+
+        if event_type == 'start':
+            if start_time is None:
+                start_time = ts
+            status = 'running'
+        elif event_type in ('stop', 'crash'):
+            if start_time:
+                duration = (ts - start_time).total_seconds()
+                total_up += duration
+                start_time = None
+            status = 'stopped'
 
     now = datetime.utcnow()
-    total_up = timedelta(0)
-    total_down = timedelta(0)
-    last_time = events[0][1]  # start from first event
-    is_running = False
-
-    for typ, ts in events:
-        if last_time is not None:
-            delta = ts - last_time
-            if is_running:
-                total_up += delta
-            else:
-                total_down += delta
-
-        if typ == "start":
-            is_running = True
-        elif typ in ("stop", "crash"):
-            is_running = False
-
-        last_time = ts
-
-    # If still running at the end (no final stop/crash), count until now
-    if is_running and last_time:
-        current_up = now - last_time
+    if start_time:
+        current_up = (now - start_time).total_seconds()
         total_up += current_up
+        status = 'running'
 
     total_time = total_up + total_down
-    uptime_pct = 100.0 if total_time.total_seconds() == 0 else (total_up.total_seconds() / total_time.total_seconds() * 100)
-
-    status = "running" if is_running else "stopped"
+    uptime_pct = (total_up / total_time * 100) if total_time > 0 else 0.0
 
     return {
-        "total_up_sec": int(total_up.total_seconds()),
-        "total_down_sec": int(total_down.total_seconds()),
-        "uptime_pct": uptime_pct,
-        "status": status,
-        "last_event_time": last_time.isoformat() if last_time else None
+        'total_up_sec': int(total_up),
+        'total_down_sec': int(total_down),
+        'uptime_pct': uptime_pct,
+        'status': status,
+        'last_event_time': last_event_time
     }
 
-# ────────────────────────────────────────────────
-# Print in yellow + save snapshot
-# ────────────────────────────────────────────────
-def print_uptime_stats(s):
-    now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-    up_str = str(timedelta(seconds=s['total_up_sec']))
-    down_str = str(timedelta(seconds=s['total_down_sec']))
-    line = f"{YELLOW}[UPTIME] {now_str} | Up: {up_str} | Down: {down_str} | {s['uptime_pct']:.3f}% | Status: {s['status']}{RESET}"
-    print(line)
+def print_uptime_stats(stats):
+    up_str = str(timedelta(seconds=stats['total_up_sec']))
+    down_str = str(timedelta(seconds=stats['total_down_sec']))
+    print(f"{YELLOW}[UPTIME] {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} | "
+          f"Up: {up_str} | Down: {down_str} | {stats['uptime_pct']:.3f}% | "
+          f"Status: {stats['status']}{RESET}")
 
-def save_stats_snapshot(s):
+def save_stats_snapshot(stats):
     now = datetime.utcnow().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('''
-            INSERT INTO uptime_stats 
-            (timestamp, total_uptime_sec, total_downtime_sec, uptime_percentage)
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO uptime_stats (timestamp, total_uptime_sec, total_downtime_sec, uptime_percentage)
             VALUES (?, ?, ?, ?)
-        ''', (now, s['total_up_sec'], s['total_down_sec'], s['uptime_pct']))
+        ''', (now, stats['total_up_sec'], stats['total_down_sec'], stats['uptime_pct']))
         conn.commit()
 
-# ────────────────────────────────────────────────
-# Periodic printer + saver (daemon thread)
-# ────────────────────────────────────────────────
 def periodic_update():
-    print("[uptime_plugin] Periodic thread started (every 60s)")
     while True:
-        s = calculate_uptime_stats()
-        print_uptime_stats(s)
-        save_stats_snapshot(s)
+        stats = calculate_uptime_stats()
+        print_uptime_stats(stats)
+        save_stats_snapshot(stats)
         time.sleep(60)
 
-# ────────────────────────────────────────────────
-# /uptime command
-# ────────────────────────────────────────────────
-async def cmd_uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    s = calculate_uptime_stats()
-    up_str = str(timedelta(seconds=s['total_up_sec']))
-    down_str = str(timedelta(seconds=s['total_down_sec']))
-    text = (
-        f"**Uptime Statistics**\n"
-        f"• Status: **{s['status'].upper()}**\n"
-        f"• Total uptime: {up_str}\n"
-        f"• Total downtime: {down_str}\n"
-        f"• Uptime percentage: **{s['uptime_pct']:.3f}%**\n"
-        f"• Last event: {s['last_event_time'] or 'N/A'}"
-    )
-    await update.message.reply_text(text, parse_mode="Markdown")
-
-# ────────────────────────────────────────────────
-# Startup + shutdown
-# ────────────────────────────────────────────────
 init_db()
 
 # Record start on every launch
@@ -191,7 +155,5 @@ def on_shutdown():
 
 atexit.register(on_shutdown)
 
-# Register command
-def register(app: Application):
-    app.add_handler(CommandHandler("uptime", cmd_uptime))
-    print("[uptime_plugin] /uptime command registered")
+# Removed: def register(app) block – it was never called and can't be safely called here.
+# Command will be moved to commands/uptime_cmd.py in next update so cmd_loader picks it up.
