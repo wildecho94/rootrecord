@@ -23,7 +23,7 @@ ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
 def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS uptime_records (
@@ -45,7 +45,7 @@ def init_db():
     print("[uptime_plugin] Database tables ready")
 
 def get_all_events():
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute("SELECT event_type, timestamp FROM uptime_records ORDER BY id ASC")
         return c.fetchall()
@@ -75,7 +75,6 @@ def calculate_uptime_stats():
         if event_type == 'start':
             if start_time is None:
                 start_time = ts
-                # If there was a previous stop, add gap as downtime
                 if prev_end_time:
                     down_duration = (ts - prev_end_time).total_seconds()
                     if down_duration > 0:
@@ -95,7 +94,6 @@ def calculate_uptime_stats():
         total_up += current_up
         status = 'running'
     elif prev_end_time:
-        # If currently stopped, add time since last stop as downtime
         current_down = (now - prev_end_time).total_seconds()
         total_down += current_down
 
@@ -119,7 +117,7 @@ def print_uptime_stats(stats):
 
 def save_stats_snapshot(stats):
     now = datetime.utcnow().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
         c.execute('''
             INSERT INTO uptime_stats (timestamp, total_uptime_sec, total_downtime_sec, uptime_percentage)
@@ -137,7 +135,7 @@ def periodic_update():
 init_db()
 
 # Record start on every launch
-with sqlite3.connect(DB_PATH) as conn:
+with sqlite3.connect(DB_PATH, timeout=10) as conn:
     conn.execute(
         "INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
         ("start", datetime.utcnow().isoformat())
@@ -156,7 +154,7 @@ thread.start()
 # Graceful shutdown: record stop/crash
 def on_shutdown():
     now = datetime.utcnow().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
+    with sqlite3.connect(DB_PATH, timeout=10) as conn:
         conn.execute(
             "INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
             ("stop", now)
@@ -165,6 +163,3 @@ def on_shutdown():
     print("[uptime_plugin] Shutdown recorded")
 
 atexit.register(on_shutdown)
-
-# Removed: def register(app) block – it was never called and can't be safely called here.
-# Command will be moved to commands/uptime_cmd.py in next update so cmd_loader picks it up.
