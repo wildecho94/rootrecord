@@ -1,14 +1,6 @@
 # Plugin_Files/geopy_plugin.py
 # Version: 20260113 – Separate enrichment table, original timestamps preserved
 
-"""
-Geopy plugin – reverse geocoding + distance
-All enriched data saved SEPARATELY (geopy_enriched table)
-Uses original raw timestamp from gps_records
-received_at = when enrichment ran
-No deletion/grouping of raw gps_records rows
-"""
-
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -21,27 +13,37 @@ USER_AGENT = "RootRecordBot/1.0 (contact: wildecho94@gmail.com)"
 
 geolocator = Nominatim(user_agent=USER_AGENT)
 
-def init_db():
-    print("[geopy_plugin] Creating geopy_enriched table if missing...")
+def table_exists(table_name):
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS geopy_enriched (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ping_id INTEGER NOT NULL,
-                latitude REAL NOT NULL,
-                longitude REAL NOT NULL,
-                address TEXT,
-                city TEXT,
-                country TEXT,
-                distance_m REAL,
-                original_timestamp TEXT NOT NULL,
-                enriched_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(ping_id) REFERENCES gps_records(id)
-            )
-        ''')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_ping_id ON geopy_enriched (ping_id)')
-        conn.commit()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        return c.fetchone() is not None
+
+def init_db():
+    if table_exists("geopy_enriched"):
+        print("[geopy_plugin] geopy_enriched table already exists – skipping creation")
+    else:
+        print("[geopy_plugin] Creating geopy_enriched table...")
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE geopy_enriched (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ping_id INTEGER NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    address TEXT,
+                    city TEXT,
+                    country TEXT,
+                    distance_m REAL,
+                    original_timestamp TEXT NOT NULL,
+                    enriched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(ping_id) REFERENCES gps_records(id)
+                )
+            ''')
+            c.execute('CREATE INDEX IF NOT EXISTS idx_ping_id ON geopy_enriched (ping_id)')
+            conn.commit()
+
     print("[geopy_plugin] Geopy enrichment table ready")
 
 def enrich_ping(ping_id: int, lat: float, lon: float, original_timestamp: str, prev_lat=None, prev_lon=None):

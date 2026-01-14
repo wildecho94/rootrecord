@@ -7,27 +7,37 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent.parent  # Plugin_Files → root
+ROOT = Path(__file__).parent.parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
-def create_totals_history_table():
+def table_exists(table_name):
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS dashboard_totals_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                total_users INTEGER DEFAULT 0,
-                total_pings INTEGER DEFAULT 0,
-                total_vehicles INTEGER DEFAULT 0,
-                total_fillups INTEGER DEFAULT 0,
-                total_finance_entries INTEGER DEFAULT 0,
-                total_activities INTEGER DEFAULT 0,
-                source TEXT DEFAULT 'periodic',
-                notes TEXT
-            )
-        ''')
-        conn.commit()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        return c.fetchone() is not None
+
+def create_totals_history_table():
+    if table_exists("dashboard_totals_history"):
+        print("[totals_plugin] dashboard_totals_history table already exists – skipping creation")
+    else:
+        print("[totals_plugin] Creating dashboard_totals_history table...")
+        with sqlite3.connect(DB_PATH, timeout=10) as conn:
+            c = conn.cursor()
+            c.execute('''
+                CREATE TABLE dashboard_totals_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    total_users INTEGER DEFAULT 0,
+                    total_pings INTEGER DEFAULT 0,
+                    total_vehicles INTEGER DEFAULT 0,
+                    total_fillups INTEGER DEFAULT 0,
+                    total_finance_entries INTEGER DEFAULT 0,
+                    total_activities INTEGER DEFAULT 0,
+                    source TEXT DEFAULT 'periodic',
+                    notes TEXT
+                )
+            ''')
+            conn.commit()
     print("[totals_plugin] dashboard_totals_history table ready")
 
 def save_totals_to_db(totals):
