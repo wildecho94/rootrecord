@@ -64,6 +64,7 @@ def calculate_uptime_stats():
     total_up = 0
     total_down = 0
     start_time = None
+    prev_end_time = None
     status = 'stopped'
     last_event_time = None
 
@@ -74,12 +75,18 @@ def calculate_uptime_stats():
         if event_type == 'start':
             if start_time is None:
                 start_time = ts
+                # If there was a previous stop, add gap as downtime
+                if prev_end_time:
+                    down_duration = (ts - prev_end_time).total_seconds()
+                    if down_duration > 0:
+                        total_down += down_duration
             status = 'running'
         elif event_type in ('stop', 'crash'):
             if start_time:
-                duration = (ts - start_time).total_seconds()
-                total_up += duration
+                up_duration = (ts - start_time).total_seconds()
+                total_up += up_duration
                 start_time = None
+            prev_end_time = ts
             status = 'stopped'
 
     now = datetime.utcnow()
@@ -87,6 +94,10 @@ def calculate_uptime_stats():
         current_up = (now - start_time).total_seconds()
         total_up += current_up
         status = 'running'
+    elif prev_end_time:
+        # If currently stopped, add time since last stop as downtime
+        current_down = (now - prev_end_time).total_seconds()
+        total_down += current_down
 
     total_time = total_up + total_down
     uptime_pct = (total_up / total_time * 100) if total_time > 0 else 0.0
