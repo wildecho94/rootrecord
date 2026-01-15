@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Fixed SyntaxError in SQL strings + MySQL migration prep
+# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks)
 
 import asyncio
 from datetime import datetime
