@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Fixed callback → message reply crash in /mpg
+# Version: 20260115 – Added vehicle details view + safe replies
 
 import sqlite3
 from pathlib import Path
@@ -44,7 +44,7 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
     if len(args) < 5:
-        await update.message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
+        await update.effective_message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
         return
 
     plate = args[0]
@@ -52,14 +52,14 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         year = int(args[1])
         odometer = int(args[4])
     except ValueError:
-        await update.message.reply_text("Year and Odometer must be numbers.")
+        await update.effective_message.reply_text("Year and Odometer must be numbers.")
         return
 
     make = args[2]
     model = args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
-    await update.message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
+    await update.effective_message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
 
 async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -87,21 +87,60 @@ async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.effective_message.reply_text("Your vehicles:", reply_markup=reply_markup)
 
+async def show_vehicle_details(update: Update, context: ContextTypes.DEFAULT_TYPE, vehicle_id: int):
+    """Fetch and display details for a single vehicle"""
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute('''
+            SELECT plate, year, make, model, initial_odometer, created_at
+            FROM vehicles
+            WHERE vehicle_id = ? AND user_id = ?
+        ''', (vehicle_id, update.effective_user.id))
+        vehicle = c.fetchone()
+
+    if not vehicle:
+        text = "Vehicle not found or you don't own it."
+        await send_reply(update, text)
+        return
+
+    plate, year, make, model, initial_odometer, created_at = vehicle
+    text = (
+        f"**Vehicle Details**\n"
+        f"• Plate: {plate}\n"
+        f"• Year/Make/Model: {year} {make} {model}\n"
+        f"• Initial Odometer: {initial_odometer} miles\n"
+        f"• Added on: {created_at.split('T')[0]}"
+    )
+
+    keyboard = [[InlineKeyboardButton("Back to list", callback_data="veh_list")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    else:
+        await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
 async def callback_vehicle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = query.data
 
+    if data == "veh_list":
+        # Re-show the full list
+        await cmd_vehicles(update, context)
+        await query.delete_message()  # Optional: clean up old message
+        return
+
     if data.startswith("veh_view_"):
         vid = int(data.split("_")[-1])
-        # TODO: show detailed view of vehicle
-        await query.edit_message_text(f"Viewing details for vehicle ID {vid} (not implemented yet)")
+        await show_vehicle_details(update, context, vid)
 
     elif data.startswith("veh_mpg_"):
         vid = int(data.split("_")[-1])
-        context.args = []  # reset args so cmd_mpg knows it's not a direct call
-        await cmd_mpg(update, context)  # ← this line was calling cmd_mpg with callback update
+        # Optional: could filter MPG to this vehicle only in future
+        # For now, show all (as before)
+        await cmd_mpg(update, context)
 
     elif data == "veh_cancel":
         await query.edit_message_text("Cancelled.")
@@ -170,23 +209,17 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await send_reply(update, text)
 
-async def send_reply(update: Update, text: str):
-    """Safe reply helper that works for both Message and CallbackQuery"""
+async def send_reply(update: Update, text: str, reply_markup=None, parse_mode=None):
+    """Safe reply helper for Message or CallbackQuery"""
     if update.message:
-        await update.message.reply_text(text)
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
     elif update.callback_query and update.callback_query.message:
-        await update.callback_query.message.reply_text(text)
-    else:
-        # Fallback: answer callback if possible
-        if update.callback_query:
-            await update.callback_query.answer(text, show_alert=True)
+        await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    elif update.callback_query:
+        await update.callback_query.answer(text, show_alert=True if len(text) > 200 else False)
 
 def initialize():
     init_db()
-    print("[vehicles_plugin] Initialized – vehicle management + MPG ready")
+    print("[vehicles_plugin] Initialized – vehicle management + MPG + details ready")
 
-# Register handlers (already in telegram_plugin.py or wherever you register)
-# But for completeness:
-# application.add_handler(CommandHandler("vehicles", cmd_vehicles))
-# application.add_handler(CommandHandler("mpg", cmd_mpg))
-# application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
+# Handlers are registered in telegram_plugin.py
