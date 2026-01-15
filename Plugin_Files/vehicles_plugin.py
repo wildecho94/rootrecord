@@ -161,7 +161,7 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += "───────────────\n\n"
     has_data = False
 
-    expense_categories = ["fuel", "rental car"]  # add more here later: "maintenance", "insurance", "repairs" etc.
+    expense_categories = ["fuel", "rental", "cleaners", "maintenance", "insurance", "repairs", "phone"]  # add more here later: "maintenance", "insurance", "repairs" etc.
 
     for veh in vehicles:
         vid, plate, year, make, model, initial_odo = veh
