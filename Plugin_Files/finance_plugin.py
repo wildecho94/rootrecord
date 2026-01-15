@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Back to SQLite, fixed reply input + detailed reports
+# Version: 1.43.20260117 – Back to pure SQLite (stable, no external DB deps)
 
 import sqlite3
 from datetime import datetime
