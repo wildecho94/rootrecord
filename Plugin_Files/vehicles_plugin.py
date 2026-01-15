@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Added total fuel spent, fuel $/mi, total $/mi (fuel + rental car)
+# Version: 20260115 – Expanded expense categories for total cost per mile
 
 import sqlite3
 from pathlib import Path
@@ -161,7 +161,11 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += "───────────────\n\n"
     has_data = False
 
-    expense_categories = ["fuel", "rental", "cleaners", "maintenance", "insurance", "repairs", "phone"]  # add more here later: "maintenance", "insurance", "repairs" etc.
+    # Expanded list of expense categories to include in total cost per mile
+    expense_categories = [
+        "fuel", "rental", "cleaners", "maintenance", "insurance", "repairs", "phone",
+        "registration", "tires", "parking", "tolls", "storage"
+    ]
 
     for veh in vehicles:
         vid, plate, year, make, model, initial_odo = veh
@@ -199,14 +203,14 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         overall_mpg = total_miles / total_gallons
         fuel_cost_per_mile = total_fuel_cost / total_miles if total_miles > 0 else 0
 
-        # Additional expenses from finance_records (fuel + rental car categories)
+        # Additional expenses from finance_records
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             placeholders = ','.join('?' for _ in expense_categories)
             c.execute(f'''
                 SELECT SUM(amount)
                 FROM finance_records
-                WHERE vehicle_id = ? 
+                WHERE vehicle_id = ?
                   AND type = 'expense'
                   AND category IS NOT NULL
                   AND LOWER(category) IN ({placeholders})
@@ -222,8 +226,8 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"  • Total fuel added: **{total_gallons:.2f}** gal\n"
         text += f"  • Total fuel cost: **${total_fuel_cost:.2f}**\n"
         text += f"  • Fuel cost per mile: **${fuel_cost_per_mile:.3f}**\n"
-        text += f"  • Extra expenses (rental car etc.): **${extra_expenses:.2f}**\n"
-        text += f"  • **Total cost per mile**: **${total_cost_per_mile:.3f}** (fuel + rental car)\n"
+        text += f"  • Other tracked expenses: **${extra_expenses:.2f}** (maintenance, insurance, repairs, etc.)\n"
+        text += f"  • **Total cost per mile**: **${total_cost_per_mile:.3f}** (fuel + all listed categories)\n"
         text += f"  • Fills counted: {len(fills)}\n"
         text += f"  • Period: {fills[0][3].split('T')[0]} to {fills[-1][3].split('T')[0]}\n\n"
 
