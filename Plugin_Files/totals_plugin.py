@@ -107,7 +107,7 @@ def totals_loop():
         time.sleep(60)
 
 def initialize():
-    create_totals_history_table()
+    # create_totals_history_table()
     thread = threading.Thread(target=totals_loop, daemon=True, name="TotalsUpdater")
     thread.start()
     print("[totals_plugin] Initialized – saving totals to DB every 60s")
