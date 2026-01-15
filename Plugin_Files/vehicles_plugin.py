@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Improved MPG robustness, better reporting, gap warnings
+# Version: 20260115 – Cumulative MPG using ALL fills (full + partial), no ignoring
 
 import sqlite3
 from pathlib import Path
@@ -47,16 +47,16 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
         return
 
-    plate = args[0]
+    plate = args[0].upper()
     try:
         year = int(args[1])
-        odometer = int(args[4])
+        odometer = int(args[-1])
     except ValueError:
         await update.effective_message.reply_text("Year and Odometer must be numbers.")
         return
 
-    make = ' '.join(args[2:-1])  # Allow multi-word makes/models
-    model = args[-1] if len(args) > 5 else args[3]
+    make = ' '.join(args[2:-1]) if len(args) > 5 else args[2]
+    model = args[-2] if len(args) > 5 else args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
     await update.effective_message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
@@ -155,11 +155,11 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_reply(update, "No vehicles found. Add one with /vehicle add first.")
         return
 
-    text = "**MPG Statistics**\n"
+    text = "**MPG Statistics (Cumulative – all fills included)**\n"
     if is_from_button:
         text += "_(from vehicle list)_\n"
     text += "───────────────\n\n"
-    has_any_data = False
+    has_data = False
 
     for veh in vehicles:
         vid, plate, year, make, model, initial_odo = veh
@@ -167,52 +167,45 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute('''
-                SELECT fill_id, odometer, gallons, fill_date, is_full_tank
+                SELECT odometer, gallons, fill_date
                 FROM fuel_records
-                WHERE vehicle_id = ?
+                WHERE vehicle_id = ? AND gallons > 0
                 ORDER BY fill_date ASC
             ''', (vid,))
-            all_fills = c.fetchall()
+            fills = c.fetchall()
 
-        full_fills = [f for f in all_fills if f[4] == 1 and f[1] is not None]
-
-        if len(full_fills) < 2:
-            text += f"**{year} {make} {model} ({plate})**\n"
-            text += f"  Not enough full-tank data (need ≥2 full fills with odometer)\n\n"
+        if not fills:
+            text += f"**{year} {make} {model} ({plate})**\n  No fill-up records yet\n\n"
             continue
 
-        mpgs = []
-        prev_odo = initial_odo
-        used_count = 0
-
-        for fill in full_fills:
-            fill_id, odo, gal, date, _ = fill
-            if odo <= prev_odo:
-                print(f"[MPG WARN] {plate}: non-increasing odo {odo} <= {prev_odo} at {date}")
-                continue
-            miles = odo - prev_odo
-            if gal > 0 and miles > 0:
-                mpg = miles / gal
-                mpgs.append(mpg)
-                used_count += 1
-            prev_odo = odo
-
-        if not mpgs:
-            text += f"**{year} {make} {model} ({plate})**\n"
-            text += f"  No valid MPG intervals (check odometer progression)\n\n"
+        # Find the highest valid odometer (skip bogus low values)
+        valid_odos = [f[0] for f in fills if f[0] is not None and f[0] >= 1000]
+        if not valid_odos:
+            text += f"**{year} {make} {model} ({plate})**\n  No valid odometer readings (all too low)\n\n"
             continue
 
-        has_any_data = True
-        avg_mpg = sum(mpgs) / len(mpgs)
-        last_mpg = mpgs[-1]
+        latest_odo = max(valid_odos)
+        total_miles = latest_odo - initial_odo
+        total_gallons = sum(f[1] for f in fills)
+
+        if total_miles <= 0 or total_gallons <= 0:
+            text += f"**{year} {make} {model} ({plate})**\n  Invalid totals (miles: {total_miles}, gallons: {total_gallons:.2f})\n\n"
+            continue
+
+        overall_mpg = total_miles / total_gallons
 
         text += f"**{year} {make} {model} ({plate})**\n"
-        text += f"  • Last MPG: **{last_mpg:.1f}**\n"
-        text += f"  • Average: **{avg_mpg:.1f}** ({len(mpgs)} intervals, {used_count} valid full fills)\n"
-        text += f"  • From initial {initial_odo} to latest {prev_odo} mi\n\n"
+        text += f"  • Overall MPG: **{overall_mpg:.1f}**\n"
+        text += f"  • Total miles: {total_miles} mi\n"
+        text += f"  • Total gallons added: {total_gallons:.2f} gal\n"
+        text += f"  • Fills counted: {len(fills)}\n"
+        text += f"  • Odo range: {initial_odo} → {latest_odo} mi\n"
+        text += f"  • Period: {fills[0][2].split('T')[0]} to {fills[-1][2].split('T')[0]}\n\n"
 
-    if not has_any_data:
-        text += "No usable MPG data yet.\nLog full tank fill-ups with odometer readings to calculate efficiency."
+        has_data = True
+
+    if not has_data:
+        text += "No usable data yet. Add fill-ups with realistic odometer values."
 
     await send_reply(update, text, parse_mode="Markdown")
 
@@ -226,4 +219,4 @@ async def send_reply(update: Update, text: str, reply_markup=None, parse_mode=No
 
 def initialize():
     init_db()
-    print("[vehicles_plugin] Initialized – vehicle management + improved MPG ready")
+    print("[vehicles_plugin] Initialized – vehicle management + cumulative MPG ready")
