@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260116 – Fixed "nothing happened" on button tap + better flow
+# Version: 1.43.20260116 – Fixed button clicks + detailed balance/networth reports
 
 import sqlite3
 from datetime import datetime
@@ -49,15 +49,10 @@ async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
 
     if args:
-        # Old direct style still supported
+        # Legacy direct command support
         sub = args[0].lower()
         if sub in ('balance', 'networth'):
-            if sub == 'balance':
-                bal = get_balance()
-                await update.effective_message.reply_text(f"Current balance: **${bal:.2f}**", parse_mode="Markdown")
-            else:
-                nw = get_networth()
-                await update.effective_message.reply_text(f"Net worth: **${nw:.2f}**", parse_mode="Markdown")
+            await show_detailed_balance_or_networth(update, context, sub == 'balance')
             return
 
         if len(args) < 3:
@@ -80,23 +75,15 @@ async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.effective_message.reply_text("Unknown operation. Use the menu with /finance.")
         return
 
-    # No args → show menu
+    # Show main menu
     keyboard = [
-        [
-            InlineKeyboardButton("Expense 💸", callback_data="fin_expense"),
-            InlineKeyboardButton("Income 💰", callback_data="fin_income"),
-        ],
-        [
-            InlineKeyboardButton("Debt 📉", callback_data="fin_debt"),
-            InlineKeyboardButton("Asset 📈", callback_data="fin_asset"),
-        ],
-        [
-            InlineKeyboardButton("Balance ⚖️", callback_data="fin_balance"),
-            InlineKeyboardButton("Net Worth 🌐", callback_data="fin_networth"),
-        ],
-        [
-            InlineKeyboardButton("Cancel ❌", callback_data="fin_cancel"),
-        ]
+        [InlineKeyboardButton("Expense 💸", callback_data="fin_expense"),
+         InlineKeyboardButton("Income 💰", callback_data="fin_income")],
+        [InlineKeyboardButton("Debt 📉", callback_data="fin_debt"),
+         InlineKeyboardButton("Asset 📈", callback_data="fin_asset")],
+        [InlineKeyboardButton("Balance ⚖️", callback_data="fin_balance"),
+         InlineKeyboardButton("Net Worth 🌐", callback_data="fin_networth")],
+        [InlineKeyboardButton("Cancel ❌", callback_data="fin_cancel")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -113,18 +100,16 @@ async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "fin_cancel":
         await query.edit_message_text("Cancelled.")
+        if "fin_pending" in context.user_data:
+            del context.user_data["fin_pending"]
         return
 
-    if data == "fin_balance":
-        bal = get_balance()
-        await query.edit_message_text(f"Current balance: **${bal:.2f}**", parse_mode="Markdown")
+    if data in ("fin_balance", "fin_networth"):
+        is_balance = data == "fin_balance"
+        await show_detailed_balance_or_networth(update, context, is_balance)
         return
 
-    if data == "fin_networth":
-        nw = get_networth()
-        await query.edit_message_text(f"Net worth: **${nw:.2f}**", parse_mode="Markdown")
-        return
-
+    # Logging types
     type_map = {
         "fin_expense": "expense",
         "fin_income": "income",
@@ -136,25 +121,27 @@ async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if entry_type:
         context.user_data["fin_pending"] = {"type": entry_type}
         await query.edit_message_text(
-            f"Enter details for **{entry_type.capitalize()}**:\n"
-            f"Reply with: amount description [category]\n\n"
+            f"**{entry_type.capitalize()} Entry**\n\n"
+            f"Reply with:\n"
+            f"`amount description [category]`\n\n"
             f"Examples:\n"
             f"45.67 Gas station Fuel\n"
-            f"1200.00 Monthly salary Salary\n"
-            f"Reply below ↓"
+            f"1200 Monthly salary Salary\n"
+            f"Reply below ↓",
+            parse_mode="Markdown"
         )
     else:
-        await query.edit_message_text("Unknown action. Try /finance again.")
+        await query.edit_message_text("Unknown action. Use /finance to start again.")
 
 async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "fin_pending" not in context.user_data:
         return
 
-    pending = context.user_data.get("fin_pending", {})
+    pending = context.user_data["fin_pending"]
     entry_type = pending.get("type")
 
     if not entry_type:
-        await update.message.reply_text("Session expired. Use /finance to start again.")
+        await update.message.reply_text("Session expired. Use /finance to start.")
         context.user_data.pop("fin_pending", None)
         return
 
@@ -162,13 +149,13 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
     args = text.split(maxsplit=2)
 
     if len(args) < 2:
-        await update.message.reply_text("Need at least amount and description.\nTry again or /finance to restart.")
+        await update.message.reply_text("Need at least amount and description.\nReply again or /finance to restart.")
         return
 
     try:
         amount = float(args[0])
     except ValueError:
-        await update.message.reply_text("First number must be the amount.\nExample: 45.67 Gas Fuel")
+        await update.message.reply_text("First value must be the amount (number).")
         return
 
     desc = args[1]
@@ -176,35 +163,22 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
 
     log_entry(entry_type, amount, desc, cat)
     await update.message.reply_text(
-        f"✅ {entry_type.capitalize()} of **${amount:.2f}** logged: {desc}",
+        f"✅ **{entry_type.capitalize()}** of **${amount:.2f}** logged: {desc}",
         parse_mode="Markdown"
     )
 
     context.user_data.pop("fin_pending", None)
 
-def get_balance():
+async def show_detailed_balance_or_networth(update: Update, context: ContextTypes.DEFAULT_TYPE, is_balance: bool):
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
+
+        # Totals
         c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
-        income = c.fetchone()[0] or 0
+        total_income = c.fetchone()[0] or 0.0
         c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
-        expense = c.fetchone()[0] or 0
-        return income - expense
-
-def get_networth():
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type IN ('income', 'asset')")
-        assets = c.fetchone()[0] or 0
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type IN ('expense', 'debt')")
-        liabilities = c.fetchone()[0] or 0
-        return assets - liabilities
-
-def initialize():
-    init_db()
-    print("[finance_plugin] Initialized – button menu ready")
-
-# Registration (add this in telegram_plugin.py where other handlers are added):
-# application.add_handler(CommandHandler("finance", finance))
-# application.add_handler(CallbackQueryHandler(finance_callback, pattern="^fin_"))
-# application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_finance_input))
+        total_expense = c.fetchone()[0] or 0.0
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'asset'")
+        total_assets = c.fetchone()[0] or 0.0
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'debt'")
+        total_debt = c.fetchone()[0]
