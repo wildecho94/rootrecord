@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Added vehicle details view + safe replies
+# Version: 20260115 – Improved MPG robustness, better reporting, gap warnings
 
 import sqlite3
 from pathlib import Path
@@ -55,8 +55,8 @@ async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text("Year and Odometer must be numbers.")
         return
 
-    make = args[2]
-    model = args[3]
+    make = ' '.join(args[2:-1])  # Allow multi-word makes/models
+    model = args[-1] if len(args) > 5 else args[3]
 
     add_vehicle(user_id, plate, year, make, model, odometer)
     await update.effective_message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
@@ -88,7 +88,6 @@ async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("Your vehicles:", reply_markup=reply_markup)
 
 async def show_vehicle_details(update: Update, context: ContextTypes.DEFAULT_TYPE, vehicle_id: int):
-    """Fetch and display details for a single vehicle"""
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
@@ -99,17 +98,16 @@ async def show_vehicle_details(update: Update, context: ContextTypes.DEFAULT_TYP
         vehicle = c.fetchone()
 
     if not vehicle:
-        text = "Vehicle not found or you don't own it."
-        await send_reply(update, text)
+        await send_reply(update, "Vehicle not found or access denied.")
         return
 
     plate, year, make, model, initial_odometer, created_at = vehicle
     text = (
         f"**Vehicle Details**\n"
-        f"• Plate: {plate}\n"
-        f"• Year/Make/Model: {year} {make} {model}\n"
-        f"• Initial Odometer: {initial_odometer} miles\n"
-        f"• Added on: {created_at.split('T')[0]}"
+        f"• **Plate**: {plate}\n"
+        f"• **Year / Make / Model**: {year} {make} {model}\n"
+        f"• **Initial Odometer**: {initial_odometer} mi\n"
+        f"• **Added**: {created_at.split('T')[0]}"
     )
 
     keyboard = [[InlineKeyboardButton("Back to list", callback_data="veh_list")]]
@@ -127,9 +125,7 @@ async def callback_vehicle_menu(update: Update, context: ContextTypes.DEFAULT_TY
     data = query.data
 
     if data == "veh_list":
-        # Re-show the full list
         await cmd_vehicles(update, context)
-        await query.delete_message()  # Optional: clean up old message
         return
 
     if data.startswith("veh_view_"):
@@ -137,9 +133,6 @@ async def callback_vehicle_menu(update: Update, context: ContextTypes.DEFAULT_TY
         await show_vehicle_details(update, context, vid)
 
     elif data.startswith("veh_mpg_"):
-        vid = int(data.split("_")[-1])
-        # Optional: could filter MPG to this vehicle only in future
-        # For now, show all (as before)
         await cmd_mpg(update, context)
 
     elif data == "veh_cancel":
@@ -147,6 +140,7 @@ async def callback_vehicle_menu(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    is_from_button = bool(update.callback_query)
 
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -158,68 +152,78 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vehicles = c.fetchall()
 
     if not vehicles:
-        text = "No vehicles found. Add one with /vehicle add first."
-        await send_reply(update, text)
+        await send_reply(update, "No vehicles found. Add one with /vehicle add first.")
         return
 
-    text = "MPG Stats:\n"
-    has_data = False
+    text = "**MPG Statistics**\n"
+    if is_from_button:
+        text += "_(from vehicle list)_\n"
+    text += "───────────────\n\n"
+    has_any_data = False
 
     for veh in vehicles:
-        vehicle_id, plate, year, make, model, initial_odometer = veh
+        vid, plate, year, make, model, initial_odo = veh
 
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute('''
-                SELECT fill_id, odometer, gallons, fill_date
+                SELECT fill_id, odometer, gallons, fill_date, is_full_tank
                 FROM fuel_records
-                WHERE vehicle_id = ? AND is_full_tank = 1 AND odometer IS NOT NULL
+                WHERE vehicle_id = ?
                 ORDER BY fill_date ASC
-            ''', (vehicle_id,))
-            full_tanks = c.fetchall()
+            ''', (vid,))
+            all_fills = c.fetchall()
 
-        if len(full_tanks) == 0:
-            text += f"{year} {make} {model} ({plate}): No full-tank data yet\n"
+        full_fills = [f for f in all_fills if f[4] == 1 and f[1] is not None]
+
+        if len(full_fills) < 2:
+            text += f"**{year} {make} {model} ({plate})**\n"
+            text += f"  Not enough full-tank data (need ≥2 full fills with odometer)\n\n"
             continue
 
         mpgs = []
-        prev_odometer = initial_odometer
+        prev_odo = initial_odo
+        used_count = 0
 
-        for fill in full_tanks:
-            current_odometer, gallons = fill[1], fill[2]
-            if current_odometer is None or gallons <= 0:
+        for fill in full_fills:
+            fill_id, odo, gal, date, _ = fill
+            if odo <= prev_odo:
+                print(f"[MPG WARN] {plate}: non-increasing odo {odo} <= {prev_odo} at {date}")
                 continue
-            miles = current_odometer - prev_odometer
-            if miles > 0:
-                mpg = miles / gallons
+            miles = odo - prev_odo
+            if gal > 0 and miles > 0:
+                mpg = miles / gal
                 mpgs.append(mpg)
-            prev_odometer = current_odometer
+                used_count += 1
+            prev_odo = odo
 
         if not mpgs:
-            text += f"{year} {make} {model} ({plate}): No valid MPG intervals\n"
+            text += f"**{year} {make} {model} ({plate})**\n"
+            text += f"  No valid MPG intervals (check odometer progression)\n\n"
             continue
 
-        has_data = True
+        has_any_data = True
         avg_mpg = sum(mpgs) / len(mpgs)
         last_mpg = mpgs[-1]
-        text += f"{year} {make} {model} ({plate}): Last {last_mpg:.1f}, Avg {avg_mpg:.1f} ({len(mpgs)} intervals)\n"
 
-    if not has_data:
-        text += "\nNo MPG data yet. Log full tank fill-ups with odometer."
+        text += f"**{year} {make} {model} ({plate})**\n"
+        text += f"  • Last MPG: **{last_mpg:.1f}**\n"
+        text += f"  • Average: **{avg_mpg:.1f}** ({len(mpgs)} intervals, {used_count} valid full fills)\n"
+        text += f"  • From initial {initial_odo} to latest {prev_odo} mi\n\n"
 
-    await send_reply(update, text)
+    if not has_any_data:
+        text += "No usable MPG data yet.\nLog full tank fill-ups with odometer readings to calculate efficiency."
+
+    await send_reply(update, text, parse_mode="Markdown")
 
 async def send_reply(update: Update, text: str, reply_markup=None, parse_mode=None):
-    """Safe reply helper for Message or CallbackQuery"""
     if update.message:
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
     elif update.callback_query and update.callback_query.message:
         await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
     elif update.callback_query:
-        await update.callback_query.answer(text, show_alert=True if len(text) > 200 else False)
+        await update.callback_query.answer(text[:200], show_alert=len(text) > 200)
 
 def initialize():
     init_db()
-    print("[vehicles_plugin] Initialized – vehicle management + MPG + details ready")
-
-# Handlers are registered in telegram_plugin.py
+    print("[vehicles_plugin] Initialized – vehicle management + improved MPG ready")
