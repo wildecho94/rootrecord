@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.42.20260115 – Cleaned handler removal, plugins self-register
+# Version: 1.43.20260117 – Skip locked SQLite temp files (.db-shm, .db-wal) during backup
 
 from pathlib import Path
 import sys
@@ -33,7 +33,7 @@ def log_debug(message: str):
     ensure_logs_folder()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     line = f"[{timestamp}] {message}"
-    print(line)  # Mirror EVERYTHING to console
+    print(line)
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
@@ -52,8 +52,12 @@ def clear_pycache():
     if count:
         log_debug(f"  Cleared {count} __pycache__ folder(s)")
 
-def ignore_zip_files(src, names):
-    return [name for name in names if name.lower().endswith('.zip')]
+def ignore_temp_db_files(src, names):
+    """Ignore temporary SQLite files (.db-shm, .db-wal) and .zip"""
+    return [
+        name for name in names
+        if name.lower().endswith(('.zip', '.db-shm', '.db-wal'))
+    ]
 
 def make_startup_backup():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -66,18 +70,18 @@ def make_startup_backup():
             dest = backup_dir / name
             shutil.copytree(
                 source, dest,
-                ignore=ignore_zip_files,
+                ignore=ignore_temp_db_files,
                 dirs_exist_ok=True
             )
-            log_debug(f"  Backed up {name} (skipped .zip files)")
+            log_debug(f"  Backed up {name} (skipped temp DB files & .zip)")
 
     if DATA_FOLDER.exists():
         shutil.copytree(
             DATA_FOLDER, backup_dir / "data",
-            ignore=ignore_zip_files,
+            ignore=ignore_temp_db_files,
             dirs_exist_ok=True
         )
-        log_debug("  Backed up data folder (skipped .zip files)")
+        log_debug("  Backed up data folder (skipped temp DB files & .zip)")
 
     log_debug("Backup complete.")
 
@@ -88,7 +92,6 @@ def ensure_all_folders():
 def ensure_database():
     DATA_FOLDER.mkdir(exist_ok=True)
     with sqlite3.connect(DATABASE) as conn:
-        # Minimal init – plugins handle their own schema
         conn.execute("CREATE TABLE IF NOT EXISTS _system_marker (dummy INTEGER)")
         conn.commit()
     log_debug("Database folder and root file ensured.")
