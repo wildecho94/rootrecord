@@ -1,55 +1,53 @@
-**v1.42.20260113 – Major Update – Fully Working Vehicle & Fuel Tracking**
+# RootRecord
 
-This release completes the entire core feature set originally described in [#1](https://github.com/wildecho94/rootrecord/issues/1). All requested functionality is now implemented, tested, and stable.
+**Personal tracking bot + dashboard**  
+RootRecord is a self-hosted Telegram bot + lightweight web dashboard for logging and analyzing personal data: GPS location pings (with reverse geocoding), vehicle fuel fill-ups (MPG & cost per mile), finance/expenses (tied to vehicles), system uptime, and more.
 
-### What's included (all items from #1 completed)
+Built in Python with SQLite backend, modular plugins, python-telegram-bot, Flask, and Cloudflare Tunnel for easy exposure.
 
-- `/vehicle add <Plate> <Year> <Make> <Model> <Odometer>`  
-  → Adds vehicle with robust parsing (multi-word models OK, year/odometer validated)
+Current version: **1.42.20260115** (January 2026)
 
-- `/vehicles`  
-  → Lists only your vehicles with action buttons (View MPG, Add New)
+## Features
 
-- `/fillup` – **new simple & clean flow** (no initial button spam)  
-  1. Prompt: "Enter fill-up: gallons price [odometer if full tank]"  
-  2. Reply with numbers (e.g. `12.5 45.67 65000` or `10.2 38.90`)  
-  3. Confirmation buttons show only your vehicles  
-  4. Tap vehicle → saves fill-up to `fuel_records` + expense to `finance_records`
+- **Telegram Bot**  
+  - Live location sharing → auto-saves GPS pings + reverse geocoding (via Geopy/Nominatim)  
+  - Vehicle management: add/list vehicles with plate, year, make, model, initial odometer  
+  - Fuel logging: gallons + price + optional odometer (full/partial tank) → auto-logs finance expense  
+  - MPG & cost stats: cumulative MPG, total fuel cost, fuel $/mile (all fill-ups included)  
+  - Finance tracking: /finance expense/income/debt/asset + balance/networth  
+  - Uptime monitoring: lifetime uptime %, crash/restart tracking  
+  - Inline buttons for vehicle selection & quick actions  
 
-- `/mpg` – per-vehicle stats  
-  → Shows last MPG + average  
-  → Uses `initial_odometer` from `vehicles` table as baseline for first fill-up MPG  
-  → Safe handling for missing data (no crashes on None values)
+- **Web Dashboard** (via Flask + Cloudflare Tunnel)  
+  - index.html served locally or via tunnel  
+  - /totals.json endpoint for live stats (users, pings, vehicles, fillups, finance entries, etc.)  
 
-- MPG calculation  
-  → Only on full tanks (odometer provided)  
-  → First fill-up uses `initial_odometer` → current odometer difference / gallons  
-  → Subsequent fills use previous fill's odometer
+- **Modular Plugin System**  
+  - Plugins auto-discovered & initialized from `Plugin_Files/*.py`  
+  - Easy to add new features (blank_plugin.py template included)  
 
-- Auto-log fuel expense in `finance_records`  
-  → Type: expense  
-  → Amount: price  
-  → Description: "Fuel fill-up: X gal @ $Y.YY"  
-  → Linked to `vehicle_id`
+- **Database**: SQLite (`data/rootrecord.db`)  
+  - Tables for gps_records, fuel_records, finance_records, vehicles, uptime, geopy_enriched, etc.  
 
-- All queries filter by user_id → only shows your own vehicles
+- **Reliability**  
+  - Auto-backups on startup (skips .zip files)  
+  - __pycache__ cleaning  
+  - Verbose logging to console + `logs/debug_rootrecord.log`  
 
-- Clean chat flow → input first, confirm vehicle second, no unnecessary buttons
+## Current Commands
 
-- Registration split:  
-  - `vehicles_plugin.py`: management + MPG  
-  - `fillup_plugin.py`: fill-up logging + confirmation flow
+- `/start` – Welcome message  
+- `/vehicles` – List vehicles + inline buttons for details / MPG  
+- `/vehicle add <Plate> <Year> <Make> <Model> <Odometer>` – Add a vehicle  
+- `/fillup` – Log fuel fill-up (gallons price [odometer]) → vehicle selection  
+- `/mpg` – Cumulative MPG, fuel cost, $/mile stats for all vehicles  
+- `/finance expense <amount> <desc> [category]` – Log expense (also auto-logged from fillups)  
+- `/finance balance` / `/finance networth`  
+- `/uptime` – System lifetime uptime stats  
 
-### Changelog summary (v1.42.20260113)
+## Setup & Run
 
-- Major feature completion: full vehicle add/list/fill-up/MPG/finance integration
-- New isolated `fillup_plugin.py` (input first → confirm vehicle → save)
-- Fixed `/mpg` TypeError on None values
-- Added `initial_odometer` as baseline for first fill-up MPG
-- Removed old fill-up code from `vehicles_plugin.py`
-- Improved registration in `telegram_plugin.py` (no command conflicts)
-- All commands tested end-to-end in private chat
-
-Bot is now **fully working** for the original scope in #1.
-
-Feel free to test and report any edge cases. 🚗⛽
+1. Clone repo  
+   ```bash
+   git clone https://github.com/wildecho94/rootrecord.git
+   cd rootrecord
