@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260113 – Vehicle management + MPG only (fill-up moved to fillup_plugin.py)
+# Version: 20260115 – Fixed callback → message reply crash in /mpg
 
 import sqlite3
 from pathlib import Path
@@ -66,57 +66,51 @@ async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        c.execute("SELECT vehicle_id, plate, year, make, model FROM vehicles WHERE user_id=?", (user_id,))
+        c.execute('''
+            SELECT vehicle_id, plate, year, make, model
+            FROM vehicles
+            WHERE user_id = ?
+        ''', (user_id,))
         vehicles = c.fetchall()
 
     if not vehicles:
-        await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
+        await update.effective_message.reply_text("No vehicles found. Add one with /vehicle add first.")
         return
 
     keyboard = []
-    for v in vehicles:
-        vid, plate, year, make, model = v
-        button_text = f"{year} {make} {model} ({plate})"
-        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"veh_menu_{vid}")])
-
-    keyboard.append([InlineKeyboardButton("Add New Vehicle", callback_data="veh_add")])
-    keyboard.append([InlineKeyboardButton("View MPG Stats", callback_data="veh_mpg")])
+    for vid, plate, year, make, model in vehicles:
+        keyboard.append([
+            InlineKeyboardButton(f"{year} {make} {model} ({plate})", callback_data=f"veh_view_{vid}"),
+            InlineKeyboardButton("MPG", callback_data=f"veh_mpg_{vid}")
+        ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Your vehicles:", reply_markup=reply_markup)
+    await update.effective_message.reply_text("Your vehicles:", reply_markup=reply_markup)
 
 async def callback_vehicle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = query.data
-    if data == "veh_add":
-        await query.edit_message_text("Use /vehicle add <Plate> <Year> <Make> <Model> <Odometer> to add a car.")
-        return
 
-    if data == "veh_mpg":
-        await cmd_mpg(update, context)
-        return
+    if data.startswith("veh_view_"):
+        vid = int(data.split("_")[-1])
+        # TODO: show detailed view of vehicle
+        await query.edit_message_text(f"Viewing details for vehicle ID {vid} (not implemented yet)")
 
-    if not data.startswith("veh_menu_"):
-        return
+    elif data.startswith("veh_mpg_"):
+        vid = int(data.split("_")[-1])
+        context.args = []  # reset args so cmd_mpg knows it's not a direct call
+        await cmd_mpg(update, context)  # ← this line was calling cmd_mpg with callback update
 
-    vehicle_id = int(data.split("_")[-1])
-    context.user_data["selected_vehicle_id"] = vehicle_id
-
-    keyboard = [
-        [InlineKeyboardButton("View MPG", callback_data=f"veh_viewmpg_{vehicle_id}")],
-        [InlineKeyboardButton("Back to list", callback_data="veh_list")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text("Vehicle actions:", reply_markup=reply_markup)
+    elif data == "veh_cancel":
+        await query.edit_message_text("Cancelled.")
 
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # Get all vehicles for the user
         c.execute('''
             SELECT vehicle_id, plate, year, make, model, initial_odometer
             FROM vehicles
@@ -125,7 +119,8 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vehicles = c.fetchall()
 
     if not vehicles:
-        await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
+        text = "No vehicles found. Add one with /vehicle add first."
+        await send_reply(update, text)
         return
 
     text = "MPG Stats:\n"
@@ -134,7 +129,6 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for veh in vehicles:
         vehicle_id, plate, year, make, model, initial_odometer = veh
 
-        # Get all full-tank fills with odometer, ordered by date
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute('''
@@ -150,7 +144,7 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
 
         mpgs = []
-        prev_odometer = initial_odometer  # Use initial as baseline for first fill
+        prev_odometer = initial_odometer
 
         for fill in full_tanks:
             current_odometer, gallons = fill[1], fill[2]
@@ -160,22 +154,39 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if miles > 0:
                 mpg = miles / gallons
                 mpgs.append(mpg)
-            prev_odometer = current_odometer  # Update for next interval
+            prev_odometer = current_odometer
 
         if not mpgs:
-            text += f"{year} {make} {model} ({plate}): No valid MPG intervals (check odometer progression)\n"
+            text += f"{year} {make} {model} ({plate}): No valid MPG intervals\n"
             continue
 
         has_data = True
         avg_mpg = sum(mpgs) / len(mpgs)
         last_mpg = mpgs[-1]
-        text += f"{year} {make} {model} ({plate}): Last MPG {last_mpg:.1f}, Avg {avg_mpg:.1f} (over {len(mpgs)} intervals)\n"
+        text += f"{year} {make} {model} ({plate}): Last {last_mpg:.1f}, Avg {avg_mpg:.1f} ({len(mpgs)} intervals)\n"
 
     if not has_data:
-        text += "\nNo MPG data yet. Log full tank fill-ups with odometer to start tracking."
+        text += "\nNo MPG data yet. Log full tank fill-ups with odometer."
 
-    await update.message.reply_text(text)
+    await send_reply(update, text)
+
+async def send_reply(update: Update, text: str):
+    """Safe reply helper that works for both Message and CallbackQuery"""
+    if update.message:
+        await update.message.reply_text(text)
+    elif update.callback_query and update.callback_query.message:
+        await update.callback_query.message.reply_text(text)
+    else:
+        # Fallback: answer callback if possible
+        if update.callback_query:
+            await update.callback_query.answer(text, show_alert=True)
 
 def initialize():
     init_db()
     print("[vehicles_plugin] Initialized – vehicle management + MPG ready")
+
+# Register handlers (already in telegram_plugin.py or wherever you register)
+# But for completeness:
+# application.add_handler(CommandHandler("vehicles", cmd_vehicles))
+# application.add_handler(CommandHandler("mpg", cmd_mpg))
+# application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
