@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Cumulative MPG using ALL fills (full + partial), no ignoring
+# Version: 20260115 – Added total fuel spent, fuel $/mi, total $/mi (fuel + rental car)
 
 import sqlite3
 from pathlib import Path
@@ -155,19 +155,22 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_reply(update, "No vehicles found. Add one with /vehicle add first.")
         return
 
-    text = "**MPG Statistics (Cumulative – all fills included)**\n"
+    text = "**Vehicle Cost & MPG Statistics (Cumulative – all fills included)**\n"
     if is_from_button:
         text += "_(from vehicle list)_\n"
     text += "───────────────\n\n"
     has_data = False
 
+    expense_categories = ["fuel", "rental car"]  # add more here later: "maintenance", "insurance", "repairs" etc.
+
     for veh in vehicles:
         vid, plate, year, make, model, initial_odo = veh
 
+        # Fuel fill-ups
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute('''
-                SELECT odometer, gallons, fill_date
+                SELECT odometer, gallons, price, fill_date
                 FROM fuel_records
                 WHERE vehicle_id = ? AND gallons > 0
                 ORDER BY fill_date ASC
@@ -178,34 +181,56 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"**{year} {make} {model} ({plate})**\n  No fill-up records yet\n\n"
             continue
 
-        # Find the highest valid odometer (skip bogus low values)
+        # Valid odometers
         valid_odos = [f[0] for f in fills if f[0] is not None and f[0] >= 1000]
         if not valid_odos:
-            text += f"**{year} {make} {model} ({plate})**\n  No valid odometer readings (all too low)\n\n"
+            text += f"**{year} {make} {model} ({plate})**\n  No valid odometer readings\n\n"
             continue
 
         latest_odo = max(valid_odos)
         total_miles = latest_odo - initial_odo
         total_gallons = sum(f[1] for f in fills)
+        total_fuel_cost = sum(f[2] for f in fills if f[2] is not None)
 
         if total_miles <= 0 or total_gallons <= 0:
             text += f"**{year} {make} {model} ({plate})**\n  Invalid totals (miles: {total_miles}, gallons: {total_gallons:.2f})\n\n"
             continue
 
         overall_mpg = total_miles / total_gallons
+        fuel_cost_per_mile = total_fuel_cost / total_miles if total_miles > 0 else 0
+
+        # Additional expenses from finance_records (fuel + rental car categories)
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            placeholders = ','.join('?' for _ in expense_categories)
+            c.execute(f'''
+                SELECT SUM(amount)
+                FROM finance_records
+                WHERE vehicle_id = ? 
+                  AND type = 'expense'
+                  AND category IS NOT NULL
+                  AND LOWER(category) IN ({placeholders})
+            ''', [vid] + [cat.lower() for cat in expense_categories])
+            extra_expenses = c.fetchone()[0] or 0.0
+
+        total_cost = total_fuel_cost + extra_expenses
+        total_cost_per_mile = total_cost / total_miles if total_miles > 0 else 0
 
         text += f"**{year} {make} {model} ({plate})**\n"
         text += f"  • Overall MPG: **{overall_mpg:.1f}**\n"
-        text += f"  • Total miles: {total_miles} mi\n"
-        text += f"  • Total gallons added: {total_gallons:.2f} gal\n"
+        text += f"  • Total miles driven: **{total_miles}** mi\n"
+        text += f"  • Total fuel added: **{total_gallons:.2f}** gal\n"
+        text += f"  • Total fuel cost: **${total_fuel_cost:.2f}**\n"
+        text += f"  • Fuel cost per mile: **${fuel_cost_per_mile:.3f}**\n"
+        text += f"  • Extra expenses (rental car etc.): **${extra_expenses:.2f}**\n"
+        text += f"  • **Total cost per mile**: **${total_cost_per_mile:.3f}** (fuel + rental car)\n"
         text += f"  • Fills counted: {len(fills)}\n"
-        text += f"  • Odo range: {initial_odo} → {latest_odo} mi\n"
-        text += f"  • Period: {fills[0][2].split('T')[0]} to {fills[-1][2].split('T')[0]}\n\n"
+        text += f"  • Period: {fills[0][3].split('T')[0]} to {fills[-1][3].split('T')[0]}\n\n"
 
         has_data = True
 
     if not has_data:
-        text += "No usable data yet. Add fill-ups with realistic odometer values."
+        text += "No usable data yet. Add fill-ups and expenses with vehicle_id linked."
 
     await send_reply(update, text, parse_mode="Markdown")
 
@@ -219,4 +244,4 @@ async def send_reply(update: Update, text: str, reply_markup=None, parse_mode=No
 
 def initialize():
     init_db()
-    print("[vehicles_plugin] Initialized – vehicle management + cumulative MPG ready")
+    print("[vehicles_plugin] Initialized – vehicle management + full cost stats ready")
