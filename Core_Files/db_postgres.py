@@ -1,5 +1,5 @@
 # Core_Files/db_postgres.py
-# Version: 20260117 – Single PostgreSQL connection file (auto-creates config, local only)
+# Version: 20260117 – Auto-creates config.json + rootrecord DB if missing (local only)
 
 import json
 from pathlib import Path
@@ -16,7 +16,6 @@ def load_or_create_config():
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
     else:
-        # Auto-create with fake/test values (edit later!)
         fake_config = {
             "postgres_user": "postgres",
             "postgres_password": "rootrecord123",
@@ -26,7 +25,7 @@ def load_or_create_config():
             json.dump(fake_config, f, indent=2)
         print(f"[db_postgres] Created {CONFIG_PATH.name} with fake/test credentials.")
         print("  → Edit it with your real PostgreSQL password!")
-        print("  → Add config_postgres.json to .gitignore to keep it private.")
+        print("  → Add config_postgres.json to .gitignore!")
         config = fake_config
 
     required = ["postgres_user", "postgres_password", "postgres_db"]
@@ -41,38 +40,43 @@ config = load_or_create_config()
 DATABASE_URL = (
     f"postgresql+asyncpg://"
     f"{config['postgres_user']}:{config['postgres_password']}"
-    f"@localhost:5432/{config['postgres_db']}"
+    f"@localhost:5432/postgres"  # Connect to default 'postgres' DB first
 )
 
+# Engine for initial connection (to create DB if needed)
 engine = create_async_engine(
     DATABASE_URL,
-    echo=False,  # Change to True for query logging during testing
+    echo=False,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800
 )
 
-AsyncSessionLocal = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
-
-async def get_db():
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+async def create_database_if_missing():
+    print("[db_postgres] Checking/creating database 'rootrecord'...")
+    async with engine.connect() as conn:
+        # Check if DB exists
+        result = await conn.execute(text(
+            f"SELECT 1 FROM pg_database WHERE datname = '{config['postgres_db']}'"
+        ))
+        if not result.scalar():
+            print(f"[db_postgres] Database '{config['postgres_db']}' does not exist – creating...")
+            await conn.execute(text(f"CREATE DATABASE {config['postgres_db']}"))
+            await conn.commit()
+            print(f"[db_postgres] Created database '{config['postgres_db']}'")
+        else:
+            print(f"[db_postgres] Database '{config['postgres_db']}' already exists")
 
 async def init_postgres():
-    print("[db_postgres] Testing PostgreSQL connection...")
-    async with engine.begin() as conn:
+    print("[db_postgres] Initializing PostgreSQL...")
+    await create_database_if_missing()
+
+    # Reconnect to the actual DB
+    app_db_url = DATABASE_URL.replace("/postgres", f"/{config['postgres_db']}")
+    app_engine = create_async_engine(app_db_url, echo=False)
+    async with app_engine.begin() as conn:
         result = await conn.execute(text("SELECT version()"))
         version = result.scalar()
-    print(f"[db_postgres] PostgreSQL connected! Version: {version}")
+    print(f"[db_postgres] Connected! PostgreSQL version: {version}")
     print("[db_postgres] Ready – single local DB (localhost only)")

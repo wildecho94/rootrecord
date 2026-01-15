@@ -8,25 +8,27 @@ from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from core.db_postgres import get_db, init_postgres  # Shared Postgres helper
+from core.db_postgres import get_db, init_postgres  # Shared local Postgres helper
 
 ROOT = Path(__file__).parent.parent
 
-async def init_db(session):
+async def init_db():
     print("[finance_plugin] Creating/updating finance_records table in PostgreSQL...")
-    await session.execute(text('''
-        CREATE TABLE IF NOT EXISTS finance_records (
-            id SERIAL PRIMARY KEY,
-            type TEXT NOT NULL,
-            amount REAL NOT NULL,
-            description TEXT,
-            category TEXT DEFAULT 'Uncategorized',
-            timestamp TIMESTAMP NOT NULL,
-            received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            vehicle_id INTEGER
-        )
-    '''))
-    await session.execute(text('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)'))
+    async for session in get_db():
+        await session.execute(text('''
+            CREATE TABLE IF NOT EXISTS finance_records (
+                id SERIAL PRIMARY KEY,
+                type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                description TEXT,
+                category TEXT DEFAULT 'Uncategorized',
+                timestamp TIMESTAMP NOT NULL,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                vehicle_id INTEGER
+            )
+        '''))
+        await session.execute(text('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)'))
+        await session.commit()
     print("[finance_plugin] Finance table ready in PostgreSQL")
 
 async def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
@@ -241,4 +243,5 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
 
 def initialize():
     asyncio.create_task(init_postgres())
-    print("[finance_plugin] Initialized – PostgreSQL version")
+    asyncio.create_task(init_db())
+    print("[finance_plugin] Initialized – PostgreSQL ready")
