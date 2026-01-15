@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Buttons responsive, debug prints, back buttons
+# Version: 1.43.20260117 – Fixed NameError in show_detailed_report + full reports
 
 import sqlite3
 from datetime import datetime
@@ -86,13 +86,13 @@ async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.effective_message.reply_text(
-        "What would you like to do?",
+        "Finance Menu\nWhat would you like to do?",
         reply_markup=reply_markup
     )
 
 async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()  # Required - acknowledges the tap
+    await query.answer()
 
     data = query.data
     user_id = query.from_user.id
@@ -103,8 +103,13 @@ async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop(f"fin_pending_{user_id}", None)
         return
 
+    if data == "fin_menu":
+        await finance(update, context)
+        return
+
     if data in ("fin_balance", "fin_networth"):
-        await show_detailed_report(update, context, is_balance=(data == "fin_balance"))
+        is_balance = data == "fin_balance"
+        await show_detailed_report(update, context, is_balance)
         return
 
     type_map = {
@@ -167,13 +172,75 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data.pop(pending_key, None)
 
 async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYPE, is_balance: bool):
-    # (keep the detailed report function as before – no changes needed)
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        # ... (same as previous version for totals, top categories, recent) ...
-    # (text building code here – omitted for brevity, use from last version)
-    # End with:
-    keyboard = [[InlineKeyboardButton("Back to Menu", callback_data="fin_menu")]]
+
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
+        total_income = c.fetchone()[0] or 0.0
+
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
+        total_expense = c.fetchone()[0] or 0.0
+
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'asset'")
+        total_assets = c.fetchone()[0] or 0.0
+
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'debt'")
+        total_debt = c.fetchone()[0] or 0.0
+
+        balance = total_income - total_expense
+        net_worth = (total_income + total_assets) - (total_expense + total_debt)
+
+        c.execute('''
+            SELECT category, SUM(amount) as total
+            FROM finance_records
+            WHERE type = 'expense' AND category IS NOT NULL
+            GROUP BY category
+            ORDER BY total DESC
+            LIMIT 5
+        ''')
+        top_exp = c.fetchall()
+
+        c.execute('''
+            SELECT type, amount, description, category, timestamp
+            FROM finance_records
+            ORDER BY id DESC
+            LIMIT 5
+        ''')
+        recent = c.fetchall()
+
+    title = "Balance Report" if is_balance else "Net Worth Report"
+    main_val = balance if is_balance else net_worth
+    main_lbl = "Current Balance" if is_balance else "Current Net Worth"
+
+    text = f"**{title}**\n\n"
+    text += f"**{main_lbl}**: **${main_val:,.2f}**\n\n"
+
+    text += "**Overview**\n"
+    text += f"• Total Income: **${total_income:,.2f}**\n"
+    text += f"• Total Expenses: **${total_expense:,.2f}**\n"
+    text += f"• Total Assets: **${total_assets:,.2f}**\n"
+    text += f"• Total Debts: **${total_debt:,.2f}**\n\n"
+
+    if top_exp:
+        text += "**Top Expense Categories**\n"
+        for cat, amt in top_exp:
+            text += f"• {cat or 'Uncategorized'}: **${amt:,.2f}**\n"
+        text += "\n"
+    else:
+        text += "**No categorized expenses yet.**\n\n"
+
+    if recent:
+        text += "**Recent Activity (last 5)**\n"
+        for typ, amt, desc, cat, ts in recent:
+            cat_str = f" ({cat})" if cat and cat != 'Uncategorized' else ""
+            text += f"• {typ.capitalize()} ${amt:,.2f}{cat_str} – {desc[:50]}{'...' if len(desc)>50 else ''} ({ts.split('T')[0]})\n"
+    else:
+        text += "**No transactions logged yet.**\n"
+
+    keyboard = [
+        [InlineKeyboardButton("Back to Menu", callback_data="fin_menu")],
+        [InlineKeyboardButton("Close", callback_data="fin_cancel")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if update.callback_query:
@@ -181,12 +248,6 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
-async def finance_back_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.data == "fin_menu":
-        await finance(update, context)
-
 def initialize():
     init_db()
-    print("[finance_plugin] Initialized – button menu ready")
+    print("[finance_plugin] Initialized – button menu with debug & back buttons")
