@@ -213,7 +213,9 @@ def register_new_plugins(application: Application):
     try:
         from Plugin_Files.finance_plugin import finance
         application.add_handler(CommandHandler("finance", finance))
-        print("[telegram_plugin] /finance registered")
+        application.add_handler(CallbackQueryHandler(finance_callback, pattern=r"^fin_"))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_finance_input))
+        print("[telegram_plugin] /finance fully registered (command + callbacks + input)")
     except ImportError as e:
         print(f"[telegram_plugin] Finance plugin not found: {e}")
 
