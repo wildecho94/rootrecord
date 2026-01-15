@@ -49,7 +49,7 @@ TOKEN = None
 try:
     with open(CONFIG_PATH, "r") as f:
         config = json.load(f)
-    TOKEN = config.get("token")
+    TOKEN = config.get("bot_token")
     print("[telegram_plugin] Token loaded successfully")
 except Exception as e:
     print(f"[telegram_plugin] Failed to load token from config: {e}")
