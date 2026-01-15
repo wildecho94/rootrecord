@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Expanded expense categories for total cost per mile
+# Version: 20260115 – Fixed extra expenses detection + debug logging
 
 import sqlite3
 from pathlib import Path
@@ -161,7 +161,6 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += "───────────────\n\n"
     has_data = False
 
-    # Expanded list of expense categories to include in total cost per mile
     expense_categories = [
         "fuel", "rental", "cleaners", "maintenance", "insurance", "repairs", "phone",
         "registration", "tires", "parking", "tolls", "storage"
@@ -185,7 +184,6 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"**{year} {make} {model} ({plate})**\n  No fill-up records yet\n\n"
             continue
 
-        # Valid odometers
         valid_odos = [f[0] for f in fills if f[0] is not None and f[0] >= 1000]
         if not valid_odos:
             text += f"**{year} {make} {model} ({plate})**\n  No valid odometer readings\n\n"
@@ -194,7 +192,7 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         latest_odo = max(valid_odos)
         total_miles = latest_odo - initial_odo
         total_gallons = sum(f[1] for f in fills)
-        total_fuel_cost = sum(f[2] for f in fills if f[2] is not None)
+        total_fuel_cost = sum(f[2] or 0 for f in fills)
 
         if total_miles <= 0 or total_gallons <= 0:
             text += f"**{year} {make} {model} ({plate})**\n  Invalid totals (miles: {total_miles}, gallons: {total_gallons:.2f})\n\n"
@@ -203,19 +201,26 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         overall_mpg = total_miles / total_gallons
         fuel_cost_per_mile = total_fuel_cost / total_miles if total_miles > 0 else 0
 
-        # Additional expenses from finance_records
+        # Extra expenses from finance_records – more flexible matching
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
-            placeholders = ','.join('?' for _ in expense_categories)
+            placeholders = ' OR '.join('LOWER(category) LIKE ?' for _ in expense_categories)
+            params = [f"%{cat.lower()}%" for cat in expense_categories]
             c.execute(f'''
-                SELECT SUM(amount)
+                SELECT SUM(amount), COUNT(*), GROUP_CONCAT(DISTINCT category)
                 FROM finance_records
                 WHERE vehicle_id = ?
                   AND type = 'expense'
+                  AND amount > 0
                   AND category IS NOT NULL
-                  AND LOWER(category) IN ({placeholders})
-            ''', [vid] + [cat.lower() for cat in expense_categories])
-            extra_expenses = c.fetchone()[0] or 0.0
+                  AND ({placeholders})
+            ''', [vid] + params)
+            row = c.fetchone()
+            extra_expenses = row[0] or 0.0
+            count_exp = row[1] or 0
+            matched_cats = row[2] or "none"
+
+        print(f"[MPG DEBUG] Vehicle {plate} ({vid}): Found {count_exp} expense entries matching categories: {matched_cats}, total ${extra_expenses:.2f}")
 
         total_cost = total_fuel_cost + extra_expenses
         total_cost_per_mile = total_cost / total_miles if total_miles > 0 else 0
@@ -226,8 +231,8 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"  • Total fuel added: **{total_gallons:.2f}** gal\n"
         text += f"  • Total fuel cost: **${total_fuel_cost:.2f}**\n"
         text += f"  • Fuel cost per mile: **${fuel_cost_per_mile:.3f}**\n"
-        text += f"  • Other tracked expenses: **${extra_expenses:.2f}** (maintenance, insurance, repairs, etc.)\n"
-        text += f"  • **Total cost per mile**: **${total_cost_per_mile:.3f}** (fuel + all listed categories)\n"
+        text += f"  • Other tracked expenses: **${extra_expenses:.2f}** ({count_exp} entries: {matched_cats})\n"
+        text += f"  • **Total cost per mile**: **${total_cost_per_mile:.3f}** (fuel + tracked categories)\n"
         text += f"  • Fills counted: {len(fills)}\n"
         text += f"  • Period: {fills[0][3].split('T')[0]} to {fills[-1][3].split('T')[0]}\n\n"
 
