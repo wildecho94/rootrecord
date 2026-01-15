@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.43.20260117 – Skip locked SQLite temp files (.db-shm, .db-wal) during backup
+# Version: 1.43.20260117 – Skip locked SQLite temp files + retry on DB lock at startup
 
 from pathlib import Path
 import sys
@@ -9,6 +9,7 @@ from datetime import datetime
 import sqlite3
 import importlib.util
 import asyncio
+import time
 
 BASE_DIR = Path(__file__).parent
 
@@ -166,6 +167,25 @@ def initialize_system():
 
     ensure_database()
     ensure_blank_plugin_template()
+
+    # Wait for DB to become available (handles lock from previous run)
+    db_ready = False
+    for attempt in range(10):
+        try:
+            with sqlite3.connect(DATABASE, timeout=5) as conn:
+                conn.execute("SELECT 1")
+            db_ready = True
+            break
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e).lower():
+                log_debug(f"[startup] DB locked, retrying in 1s ({attempt+1}/10)...")
+                time.sleep(1)
+            else:
+                log_debug(f"[startup] DB error (non-lock): {e}")
+                raise
+    if not db_ready:
+        log_debug("[startup] CRITICAL: Could not access database after 10 retries. Exiting.")
+        sys.exit(1)
 
     plugins = discover_plugin_names()
     print_discovery_report(plugins)
