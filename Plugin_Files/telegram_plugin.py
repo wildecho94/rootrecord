@@ -124,7 +124,7 @@ async def bot_main():
 
     await app.initialize()
     await app.start()
-    await app.updater.start_polling(drop_pending_updates=True, poll_interval=0.5)
+    await app.updater.start_polling(drop_pending_updates=False, poll_interval=0.5)
     print("[telegram_plugin] Polling active – full activity should now be visible")
 
 def initialize():
