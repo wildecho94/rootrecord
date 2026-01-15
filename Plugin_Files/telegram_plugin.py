@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260113 – Fixed syntax + full registration of finance, geopy, vehicles, fillup plugins
+# Version: 20260117 – Fixed finance callback registration + verbose debug
 
 import asyncio
 import json
@@ -76,171 +76,94 @@ def init_db():
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_timestamp ON gps_records (user_id, timestamp)')
         conn.commit()
-        print(f"[telegram_plugin] Database ready at: {DB_PATH} (every ping saved)")
-    except sqlite3.Error as e:
-        print(f"[telegram_plugin] DB ERROR: {e}")
-    finally:
-        if 'conn' in locals():
-            conn.close()
+        print(f"[telegram_plugin] GPS table ready")
+    except Exception as e:
+        print(f"[telegram_plugin] DB init error: {e}")
 
-def save_gps_record(update: Update):
-    msg = update.message or update.edited_message
-    if not msg or not msg.location:
-        print("[telegram_plugin] No location found - skipping save")
-        return False, None
+# ────────────────────────────────────────────────
+# Handlers
+# ────────────────────────────────────────────────
 
-    loc = msg.location
-    user = msg.from_user
-
-    if update.edited_message and msg.edit_date:
-        ping_time = msg.edit_date.isoformat()
-        ping_type = "EDIT (live ping)"
-    elif msg.date:
-        ping_time = msg.date.isoformat()
-        ping_type = "NEW"
-    else:
-        ping_time = datetime.utcnow().isoformat()
-        ping_type = "FALLBACK (no date)"
-
-    print(f"[telegram_plugin] Saving {ping_type} for user {user.id} ({user.username or 'no username'}): "
-          f"({loc.latitude:.6f}, {loc.longitude:.6f}) @ {ping_time} | Msg ID: {msg.message_id}")
-
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('''
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    loc = update.message.location
+    user = update.effective_user
+    print(f"[tel] Location from {user.id} ({user.username}): {loc.latitude}, {loc.longitude}")
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute('''
             INSERT INTO gps_records (
-                user_id, username, first_name, last_name,
-                chat_id, message_id,
-                latitude, longitude, accuracy, heading,
+                user_id, username, first_name, last_name, chat_id, message_id,
+                latitude, longitude, accuracy, heading, speed, altitude,
                 live_period, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user.id, user.username, user.first_name, user.last_name,
-            msg.chat.id, msg.message_id,
-            loc.latitude, loc.longitude, loc.horizontal_accuracy, loc.heading,
-            getattr(msg, 'live_period', None), ping_time
+            update.effective_chat.id, update.message.message_id,
+            loc.latitude, loc.longitude, loc.horizontal_accuracy,
+            loc.heading, loc.speed, loc.altitude,
+            update.message.live_period,
+            update.message.date.isoformat()
         ))
         conn.commit()
-        ping_id = cursor.lastrowid
-        print(f"[telegram_plugin] SUCCESS: Saved ping (id: {ping_id or 'new'})")
-        return True, ping_id
-    except sqlite3.Error as e:
-        print(f"[telegram_plugin] SAVE FAILED: {e}")
-        return False, None
-    finally:
-        if 'conn' in locals():
-            conn.close()
+    print(f"[tel] Saved ping {c.lastrowid}")
+
+async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"[tel] Message: {update.message.text if update.message.text else '[non-text]'} "
+          f"from {update.effective_user.username} ({update.effective_user.id})")
 
 # ────────────────────────────────────────────────
-# Command loading
+# Plugin registration helpers
 # ────────────────────────────────────────────────
+
 def load_commands(application: Application):
-    print("[telegram_plugin] Loading commands from folder...")
-    COMMANDS_DIR.mkdir(exist_ok=True)
-    start_file = COMMANDS_DIR / "start_cmd.py"
-    if not list(COMMANDS_DIR.glob("*_cmd.py")):
-        print("[telegram_plugin] No commands found - creating default /start")
-        start_file.write_text('''\
-from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    await update.message.reply_text(
-        f"Hello {user.first_name}! 👋\\n"
-        "GPS tracking active. Send a location or live location to record it.\\n"
-        "Use /vehicles for car management, /finance for money tracking."
-    )
-handler = CommandHandler("start", start)
-''', encoding='utf-8')
-
-    for path in sorted(COMMANDS_DIR.glob("*_cmd.py")):
-        if path.name.startswith("__"): continue
+    folder = Path(__file__).parent.parent / "commands"
+    for path in sorted(folder.glob("*_cmd.py")):
+        if path.name.startswith('__'):
+            continue
         cmd_name = path.stem.replace("_cmd", "")
-        print(f"[telegram_plugin] Attempting to load: /{cmd_name} from {path.name}")
+        module_name = f"commands.{path.stem}"
         try:
-            spec = importlib.util.spec_from_file_location(f"commands.{path.stem}", path)
-            if not spec:
-                print(f"[telegram_plugin] Skipped {path.name} - no spec")
-                continue
+            spec = importlib.util.spec_from_file_location(module_name, path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             if hasattr(module, "handler"):
                 application.add_handler(module.handler)
-                print(f"[telegram_plugin] SUCCESS: Loaded command /{cmd_name}")
+                print(f"[commands] Loaded /{cmd_name}")
             else:
-                print(f"[telegram_plugin] WARNING: {path.name} has no 'handler'")
+                print(f"[commands] {path.name} missing 'handler'")
         except Exception as e:
-            print(f"[telegram_plugin] FAILED to load {path.name}: {type(e).__name__}: {e}")
+            print(f"[commands] Failed to load {path.name}: {e}")
 
-# ────────────────────────────────────────────────
-# Location handler - auto-enrich with geopy
-# ────────────────────────────────────────────────
-async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("[telegram_plugin] Location handler triggered")
-    if update.edited_message:
-        print("[telegram_plugin] → EDITED message (live location ping)")
-    else:
-        print("[telegram_plugin] → NEW message")
-
-    saved, ping_id = save_gps_record(update)
-    if saved:
-        print("[telegram_plugin] Location saved successfully")
-        if ping_id:
-            loc = update.edited_message.location if update.edited_message else update.message.location
-            orig_time = update.edited_message.edit_date.isoformat() if update.edited_message and update.edited_message.edit_date else \
-                        (update.message.date.isoformat() if update.message.date else datetime.utcnow().isoformat())
-            from Plugin_Files.geopy_plugin import enrich_ping
-            enrich_ping(ping_id, loc.latitude, loc.longitude, orig_time)
-    else:
-        print("[telegram_plugin] Location save failed")
-
-async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message:
-        msg = update.message
-        text = msg.text or msg.caption or "[no text]"
-        prefix = "COMMAND" if text.startswith('/') else "MESSAGE"
-        user = msg.from_user
-        print(f"[telegram_plugin] {prefix} from {user.username or user.id} (id:{user.id}): {text}")
-
-# ────────────────────────────────────────────────
-# Register new plugins' commands & hooks
-# ────────────────────────────────────────────────
 def register_new_plugins(application: Application):
     print("[telegram_plugin] Registering new plugins...")
 
-    # Finance plugin
-    try:
-        from Plugin_Files.finance_plugin import finance
-        application.add_handler(CommandHandler("finance", finance))
-        application.add_handler(CallbackQueryHandler(finance_callback, pattern=r"^fin_"))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_finance_input))
-        print("[telegram_plugin] /finance fully registered (command + callbacks + input)")
-    except ImportError as e:
-        print(f"[telegram_plugin] Finance plugin not found: {e}")
+    # Finance plugin – menu + callbacks + input
+    from Plugin_Files.finance_plugin import (
+        finance, finance_callback, handle_finance_input
+    )
+    print("[telegram_plugin] Registering /finance with buttons...")
+    application.add_handler(CommandHandler("finance", finance))
+    application.add_handler(CallbackQueryHandler(finance_callback, pattern=r"^fin_"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_finance_input))
+    print("[telegram_plugin] /finance fully registered (command + callback + input)")
 
-    # Vehicles plugin (management only – no fillup)
-    try:
-        from Plugin_Files.vehicles_plugin import cmd_vehicle_add, cmd_vehicles, cmd_mpg, callback_vehicle_menu
-        application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))
-        application.add_handler(CommandHandler("vehicles", cmd_vehicles))
-        application.add_handler(CommandHandler("mpg", cmd_mpg))
-        application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
-        print("[telegram_plugin] Vehicles management registered")
-    except ImportError as e:
-        print(f"[telegram_plugin] Vehicles management import failed: {e}")
+    # Vehicles management
+    from Plugin_Files.vehicles_plugin import (
+        cmd_vehicle_add, cmd_vehicles, callback_vehicle_menu
+    )
+    application.add_handler(CommandHandler("vehicle", cmd_vehicle_add))
+    application.add_handler(CommandHandler("vehicles", cmd_vehicles))
+    application.add_handler(CallbackQueryHandler(callback_vehicle_menu, pattern="^veh_"))
+    print("[telegram_plugin] Vehicles management registered")
 
-    # Fillup plugin (isolated – owns /fillup now)
-    try:
-        from Plugin_Files.fillup_plugin import cmd_fillup, callback_fillup_confirm, handle_fillup_input
-        application.add_handler(CommandHandler("fillup", cmd_fillup))
-        application.add_handler(CallbackQueryHandler(callback_fillup_confirm, pattern="^fillup_confirm_|^fillup_cancel"))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_fillup_input))
-        print("[telegram_plugin] Fillup plugin registered")
-    except ImportError as e:
-        print(f"[telegram_plugin] Fillup plugin import failed: {e}")
-
-    # Geopy is auto-called from handle_location (no command needed)
+    # Fillup plugin
+    from Plugin_Files.fillup_plugin import (
+        cmd_fillup, handle_fillup_input, callback_fillup_confirm
+    )
+    application.add_handler(CommandHandler("fillup", cmd_fillup))
+    application.add_handler(CallbackQueryHandler(callback_fillup_confirm, pattern="^fillup_"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_fillup_input))
+    print("[telegram_plugin] Fillup plugin registered")
 
 # ────────────────────────────────────────────────
 # Main bot startup
