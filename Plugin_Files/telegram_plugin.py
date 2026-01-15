@@ -76,11 +76,8 @@ def init_db():
     except Exception as e:
         print(f"[telegram_plugin] DB init failed: {e}")
 
-# Bot main (polling)
-async def bot_main():
-    app = Application.builder().token(TOKEN).build()
-
-    # Load commands
+# Load commands from folder
+def load_commands(app: Application):
     print("[telegram_plugin] Loading commands from folder...")
     for path in COMMANDS_DIR.glob("*_cmd.py"):
         name = path.stem
@@ -96,6 +93,24 @@ async def bot_main():
         except Exception as e:
             print(f"[telegram_plugin] FAILED to load {name}: {e}")
 
+# Register new plugins
+def register_plugins(app: Application):
+    print("[telegram_plugin] Registering new plugins...")
+    for plugin in ['finance_plugin', 'vehicles_plugin', 'fillup_plugin']:
+        try:
+            module = importlib.util.module_from_spec(importlib.util.find_spec(f"Plugin_Files.{plugin}"))
+            module.register(app)
+            print(f"[telegram_plugin] {plugin} registered")
+        except Exception as e:
+            print(f"[telegram_plugin] Failed to register {plugin}: {e}")
+
+# Bot main loop (polling)
+async def bot_main():
+    app = Application.builder().token(TOKEN).build()
+
+    load_commands(app)
+    register_plugins(app)
+
     # Add location handler (placeholder - add your real one)
     async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = update.message
@@ -107,7 +122,6 @@ async def bot_main():
 
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
 
-    # Start polling
     await app.initialize()
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True, poll_interval=0.5)
