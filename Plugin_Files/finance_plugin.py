@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks)
+# Version: 1.43.20260117 – Fixed SyntaxError in SQL strings + MySQL migration prep
 
 import asyncio
 from datetime import datetime
@@ -198,3 +198,50 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
             FROM finance_records
             ORDER BY id DESC
             LIMIT 5
+        '''))
+        recent = recent.fetchall()
+
+    title = "Balance Report" if is_balance else "Net Worth Report"
+    main_val = balance if is_balance else net_worth
+    main_lbl = "Current Balance" if is_balance else "Current Net Worth"
+
+    text = f"**{title}**\n\n"
+    text += f"**{main_lbl}**: **${main_val:,.2f}**\n\n"
+
+    text += "**Overview**\n"
+    text += f"• Total Income: **${total_income:,.2f}**\n"
+    text += f"• Total Expenses: **${total_expense:,.2f}**\n"
+    text += f"• Total Assets: **${total_assets:,.2f}**\n"
+    text += f"• Total Debts: **${total_debt:,.2f}**\n\n"
+
+    if top_exp:
+        text += "**Top Expense Categories**\n"
+        for cat, amt in top_exp:
+            text += f"• {cat or 'Uncategorized'}: **${amt:,.2f}**\n"
+        text += "\n"
+    else:
+        text += "**No categorized expenses yet.**\n\n"
+
+    if recent:
+        text += "**Recent Activity (last 5)**\n"
+        for typ, amt, desc, cat, ts in recent:
+            cat_str = f" ({cat})" if cat and cat != 'Uncategorized' else ""
+            text += f"• {typ.capitalize()} ${amt:,.2f}{cat_str} – {desc[:50]}{'...' if len(desc)>50 else ''} ({ts.date()})\n"
+    else:
+        text += "**No transactions logged yet.**\n"
+
+    keyboard = [
+        [InlineKeyboardButton("Back to Menu", callback_data="fin_menu")],
+        [InlineKeyboardButton("Close", callback_data="fin_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    else:
+        await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
+def initialize():
+    asyncio.create_task(init_mysql())
+    asyncio.create_task(init_db())
+    print("[finance_plugin] Initialized – MySQL ready")
