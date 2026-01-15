@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Edited Version: 1.42.20260111
+# Version: 1.42.20260115 – Cleaned handler removal, plugins self-register
 
 from pathlib import Path
 import sys
@@ -17,7 +17,6 @@ PLUGIN_FOLDER  = BASE_DIR / "Plugin_Files"
 
 FOLDERS = {
     "core":    CORE_FOLDER,
-    "handler": HANDLER_FOLDER,
     "plugin":  PLUGIN_FOLDER
 }
 
@@ -78,99 +77,42 @@ def make_startup_backup():
             ignore=ignore_zip_files,
             dirs_exist_ok=True
         )
-        log_debug("  Backed up data folder (database + skipped .zip)")
+        log_debug("  Backed up data folder (skipped .zip files)")
 
-    log_debug("Backup completed")
-
-def ensure_folder_and_init(folder: Path):
-    folder.mkdir(exist_ok=True)
-    init = folder / "__init__.py"
-    if not init.exists():
-        init.touch()
-        log_debug(f"  Created __init__.py in {folder.name}")
+    log_debug("Backup complete.")
 
 def ensure_all_folders():
-    log_debug("Preparing folders...")
     for folder in FOLDERS.values():
-        ensure_folder_and_init(folder)
-        log_debug(f"  ✓ {folder.name}")
+        folder.mkdir(exist_ok=True)
 
 def ensure_database():
     DATA_FOLDER.mkdir(exist_ok=True)
-    if DATABASE.exists():
-        return
-
-    log_debug("  → Creating initial database: rootrecord.db")
-    try:
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS system_info (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        cursor.execute("INSERT OR REPLACE INTO system_info (key,value) VALUES ('version','0.1-initial')")
+    with sqlite3.connect(DATABASE) as conn:
+        # Minimal init – plugins handle their own schema
+        conn.execute("CREATE TABLE IF NOT EXISTS _system_marker (dummy INTEGER)")
         conn.commit()
-        conn.close()
-    except Exception as e:
-        log_debug(f"  Database creation failed: {e}")
+    log_debug("Database folder and root file ensured.")
 
 def ensure_blank_plugin_template():
-    name = "blank_plugin"
-    files = [
-        (PLUGIN_FOLDER / f"{name}.py",        "main entry point"),
-        (CORE_FOLDER   / f"{name}_core.py",   "core logic"),
-        (HANDLER_FOLDER/ f"{name}_handler.py","event/command handlers")
-    ]
-
-    missing = [p for p, _ in files if not p.exists()]
-    if not missing:
-        return
-
-    log_debug(f"  → Missing blank_plugin files: {len(missing)}")
-    for path, purpose in files:
-        if path.exists():
-            continue
-
-        content = f'''# {path.name}
+    blank = PLUGIN_FOLDER / "blank_plugin.py"
+    if not blank.exists():
+        with open(blank, "w", encoding="utf-8") as f:
+            f.write('''# blank_plugin.py
 """
-blank_plugin - {purpose}
+blank_plugin - main entry point
 Auto-maintained template
 """
 
-print("[blank_plugin] {path.stem} loaded")
+print("[blank_plugin] blank_plugin loaded")
 
 # === Your code goes here ===
+''')
+        log_debug("Created blank_plugin.py template")
 
-'''
-        try:
-            path.write_text(content.strip(), encoding="utf-8")
-            log_debug(f"    Created: {path.name}")
-        except Exception as e:
-            log_debug(f"    Failed to create {path.name}: {e}")
-
-def discover_plugin_names() -> set:
-    names = set()
-    for path in PLUGIN_FOLDER.glob("*.py"):
-        stem = path.stem
-        if stem == "__init__":
-            continue
-        if stem.endswith("_core") or stem.endswith("_handler"):
-            continue
-        names.add(stem)
-    return names
-
-def get_plugin_status(name: str) -> list:
-    parts = []
-    if (PLUGIN_FOLDER / f"{name}.py").is_file():
-        parts.append("main")
-    if (CORE_FOLDER / f"{name}_core.py").is_file():
-        parts.append("core")
-    if (HANDLER_FOLDER / f"{name}_handler.py").is_file():
-        parts.append("handler")
-    return parts
+def discover_plugin_names():
+    if not PLUGIN_FOLDER.exists():
+        return set()
+    return {p.stem for p in PLUGIN_FOLDER.glob("*.py") if not p.stem.startswith("_")}
 
 def print_discovery_report(plugins: set):
     if not plugins:
@@ -180,8 +122,9 @@ def print_discovery_report(plugins: set):
     log_debug(f"\nDiscovered {len(plugins)} potential plugin(s):")
     log_debug("─" * 60)
     for name in sorted(plugins):
-        parts = get_plugin_status(name)
-        status = ", ".join(parts) if parts else "incomplete"
+        status = "main"
+        if (CORE_FOLDER / f"{name}_core.py").is_file():
+            status += ", core"
         log_debug(f"  {name:18} → {status}")
     log_debug("─" * 60)
 
@@ -229,9 +172,9 @@ def initialize_system():
     log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
 async def main_loop():
-    log_debug("[core] Main asyncio loop running - all background tasks active")
+    log_debug("[core] Main asyncio loop running - background tasks active")
     while True:
-        await asyncio.sleep(60)  # Keep loop alive
+        await asyncio.sleep(60)
 
 if __name__ == "__main__":
     initialize_system()
