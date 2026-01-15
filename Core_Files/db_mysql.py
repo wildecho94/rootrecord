@@ -1,5 +1,5 @@
 # Core_Files/db_mysql.py
-# Version: 20260117 – Self-hosted local MySQL 9.5 connection (secure config.json load)
+# Version: 20260117 – Self-hosted local MySQL connection (secure config.json load)
 
 import json
 from pathlib import Path
@@ -24,9 +24,9 @@ def load_or_create_config():
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(fake_config, f, indent=2)
-        print(f"[db_mysql] Created project-local {CONFIG_PATH.name} with fake/test credentials.")
+        print(f"[db_mysql] Created {CONFIG_PATH.name} with fake/test credentials.")
         print("  → Edit it with your real MySQL password!")
-        print("  → Add config_mysql.json to .gitignore to keep it private!")
+        print("  → Add config_mysql.json to .gitignore to keep it private.")
         config = fake_config
 
     required = ["mysql_user", "mysql_password", "mysql_db"]
