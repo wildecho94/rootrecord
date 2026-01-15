@@ -1,11 +1,11 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260115 – Massive UX upgrade: /finance shows button menu
+# Version: 1.43.20260116 – Fixed "nothing happened" on button tap + better flow
 
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
@@ -45,17 +45,42 @@ def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id:
         conn.commit()
     print(f"[finance] Logged {type_}: ${amount:.2f} - {desc}")
 
-async def finance_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Main /finance command – shows button menu when no args
-    """
+async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
 
-    # If args provided → old-style direct logging
     if args:
-        return await finance_direct(update, context)
+        # Old direct style still supported
+        sub = args[0].lower()
+        if sub in ('balance', 'networth'):
+            if sub == 'balance':
+                bal = get_balance()
+                await update.effective_message.reply_text(f"Current balance: **${bal:.2f}**", parse_mode="Markdown")
+            else:
+                nw = get_networth()
+                await update.effective_message.reply_text(f"Net worth: **${nw:.2f}**", parse_mode="Markdown")
+            return
 
-    # Otherwise → show beautiful button menu
+        if len(args) < 3:
+            await update.effective_message.reply_text("Missing amount or description.\nUse /finance for menu.")
+            return
+
+        try:
+            amount = float(args[1])
+        except ValueError:
+            await update.effective_message.reply_text("Amount must be a number.")
+            return
+
+        desc = args[2]
+        cat = args[3] if len(args) > 3 else None
+
+        if sub in ('expense', 'income', 'debt', 'asset'):
+            log_entry(sub, amount, desc, cat)
+            await update.effective_message.reply_text(f"{sub.capitalize()} of **${amount:.2f}** logged: {desc}", parse_mode="Markdown")
+        else:
+            await update.effective_message.reply_text("Unknown operation. Use the menu with /finance.")
+        return
+
+    # No args → show menu
     keyboard = [
         [
             InlineKeyboardButton("Expense 💸", callback_data="fin_expense"),
@@ -69,6 +94,9 @@ async def finance_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("Balance ⚖️", callback_data="fin_balance"),
             InlineKeyboardButton("Net Worth 🌐", callback_data="fin_networth"),
         ],
+        [
+            InlineKeyboardButton("Cancel ❌", callback_data="fin_cancel"),
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -77,41 +105,15 @@ async def finance_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-async def finance_direct(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle old-style /finance <type> <amount> <desc> [category]"""
-    args = context.args
-    if len(args) < 2:
-        await update.effective_message.reply_text("Missing amount or description.\nUse /finance for menu.")
-        return
-
-    sub = args[0].lower()
-    try:
-        amount = float(args[1])
-    except ValueError:
-        await update.effective_message.reply_text("Amount must be a number.")
-        return
-
-    desc = args[2] if len(args) > 2 else ""
-    cat = args[3] if len(args) > 3 else None
-
-    if sub in ('expense', 'income', 'debt', 'asset'):
-        log_entry(sub, amount, desc, cat)
-        await update.effective_message.reply_text(f"{sub.capitalize()} of ${amount:.2f} logged: {desc}")
-    elif sub in ('balance', 'networth'):
-        if sub == 'balance':
-            bal = get_balance()
-            await update.effective_message.reply_text(f"Current balance: ${bal:.2f}")
-        else:
-            nw = get_networth()
-            await update.effective_message.reply_text(f"Net worth: ${nw:.2f}")
-    else:
-        await update.effective_message.reply_text("Unknown operation. Use the menu with /finance.")
-
 async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data = query.data
+
+    if data == "fin_cancel":
+        await query.edit_message_text("Cancelled.")
+        return
 
     if data == "fin_balance":
         bal = get_balance()
@@ -123,8 +125,6 @@ async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"Net worth: **${nw:.2f}**", parse_mode="Markdown")
         return
 
-    # For logging types: expense/income/debt/asset
-    # Reply asking for amount + desc
     type_map = {
         "fin_expense": "expense",
         "fin_income": "income",
@@ -137,43 +137,50 @@ async def finance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["fin_pending"] = {"type": entry_type}
         await query.edit_message_text(
             f"Enter details for **{entry_type.capitalize()}**:\n"
-            f"amount description [category]\n\n"
-            f"Example: 45.67 Gas station Fuel\n"
-            f"Reply with your entry."
+            f"Reply with: amount description [category]\n\n"
+            f"Examples:\n"
+            f"45.67 Gas station Fuel\n"
+            f"1200.00 Monthly salary Salary\n"
+            f"Reply below ↓"
         )
     else:
-        await query.edit_message_text("Unknown action.")
+        await query.edit_message_text("Unknown action. Try /finance again.")
 
 async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle reply messages for pending finance entries"""
     if "fin_pending" not in context.user_data:
-        return  # Not waiting for finance input
+        return
 
-    pending = context.user_data["fin_pending"]
+    pending = context.user_data.get("fin_pending", {})
+    entry_type = pending.get("type")
+
+    if not entry_type:
+        await update.message.reply_text("Session expired. Use /finance to start again.")
+        context.user_data.pop("fin_pending", None)
+        return
+
     text = update.message.text.strip()
     args = text.split(maxsplit=2)
 
     if len(args) < 2:
-        await update.message.reply_text("Need at least amount and description.")
+        await update.message.reply_text("Need at least amount and description.\nTry again or /finance to restart.")
         return
 
     try:
         amount = float(args[0])
     except ValueError:
-        await update.message.reply_text("Amount must be a number.")
+        await update.message.reply_text("First number must be the amount.\nExample: 45.67 Gas Fuel")
         return
 
     desc = args[1]
     cat = args[2] if len(args) > 2 else None
 
-    log_entry(pending["type"], amount, desc, cat)
+    log_entry(entry_type, amount, desc, cat)
     await update.message.reply_text(
-        f"{pending['type'].capitalize()} of **${amount:.2f}** logged: {desc}",
+        f"✅ {entry_type.capitalize()} of **${amount:.2f}** logged: {desc}",
         parse_mode="Markdown"
     )
 
-    # Clear pending state
-    del context.user_data["fin_pending"]
+    context.user_data.pop("fin_pending", None)
 
 def get_balance():
     with sqlite3.connect(DB_PATH) as conn:
@@ -195,9 +202,9 @@ def get_networth():
 
 def initialize():
     init_db()
-    print("[finance_plugin] Initialized – /finance button menu ready")
+    print("[finance_plugin] Initialized – button menu ready")
 
-# In telegram_plugin.py or wherever you register handlers, add:
-# application.add_handler(CommandHandler("finance", finance_menu))
+# Registration (add this in telegram_plugin.py where other handlers are added):
+# application.add_handler(CommandHandler("finance", finance))
 # application.add_handler(CallbackQueryHandler(finance_callback, pattern="^fin_"))
 # application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_finance_input))
