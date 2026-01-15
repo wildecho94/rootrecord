@@ -42,6 +42,6 @@ Development halted after repeated SQLite concurrency failures during plugin init
 6. Consider moving sensitive config (token) to encrypted DB section if filesystem exposure is a concern
 
 Project closed in incomplete state due to irresolvable startup concurrency.  
-No further development planned.
+Project will continue with reinstatement of V1.42.20260113
 
 Wild Echo – January 15, 2026
