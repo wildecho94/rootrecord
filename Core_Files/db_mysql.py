@@ -24,7 +24,7 @@ def load_or_create_config():
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(fake_config, f, indent=2)
-        print(f"[db_mysql] Created {CONFIG_PATH.name} with fake/test credentials.")
+        print(f"[db_mysql] Created project-local {CONFIG_PATH.name} with fake/test credentials.")
         print("  → Edit it with your real MySQL password!")
         print("  → Add config_mysql.json to .gitignore to keep it private.")
         config = fake_config
