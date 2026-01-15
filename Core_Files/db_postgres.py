@@ -1,5 +1,5 @@
 # Core_Files/db_postgres.py
-# Version: 1.43.20260117 – Local PostgreSQL connection (secure config.json load)
+# Version: 20260117 – Single PostgreSQL connection file (auto-creates config, local only)
 
 import json
 from pathlib import Path
@@ -11,29 +11,32 @@ import asyncio
 ROOT = Path(__file__).parent.parent
 CONFIG_PATH = ROOT / "config_postgres.json"
 
-def load_config():
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(
-            f"Missing {CONFIG_PATH.name}! Create it in root with:\n"
-            "{\n"
-            '  "postgres_user": "postgres",\n'
-            '  "postgres_password": "your_password",\n'
-            '  "postgres_db": "rootrecord"\n'
-            "}\n"
-            "Add to .gitignore!"
-        )
-
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        config = json.load(f)
+def load_or_create_config():
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    else:
+        # Auto-create with fake/test values (edit later!)
+        fake_config = {
+            "postgres_user": "postgres",
+            "postgres_password": "rootrecord123",
+            "postgres_db": "rootrecord"
+        }
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(fake_config, f, indent=2)
+        print(f"[db_postgres] Created {CONFIG_PATH.name} with fake/test credentials.")
+        print("  → Edit it with your real PostgreSQL password!")
+        print("  → Add config_postgres.json to .gitignore to keep it private.")
+        config = fake_config
 
     required = ["postgres_user", "postgres_password", "postgres_db"]
     for key in required:
         if key not in config or not config[key]:
-            raise ValueError(f"Missing '{key}' in {CONFIG_PATH.name}")
+            raise ValueError(f"Missing or empty '{key}' in {CONFIG_PATH.name}")
 
     return config
 
-config = load_config()
+config = load_or_create_config()
 
 DATABASE_URL = (
     f"postgresql+asyncpg://"
@@ -43,7 +46,7 @@ DATABASE_URL = (
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=False,
+    echo=False,  # Change to True for query logging during testing
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
@@ -67,9 +70,9 @@ async def get_db():
             await session.close()
 
 async def init_postgres():
-    print("[db_postgres] Testing single PostgreSQL connection...")
+    print("[db_postgres] Testing PostgreSQL connection...")
     async with engine.begin() as conn:
         result = await conn.execute(text("SELECT version()"))
         version = result.scalar()
-    print(f"[db_postgres] Connected! PostgreSQL version: {version}")
-    print("[db_postgres] Ready – all data in one local DB (localhost only)")
+    print(f"[db_postgres] PostgreSQL connected! Version: {version}")
+    print("[db_postgres] Ready – single local DB (localhost only)")
