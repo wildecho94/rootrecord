@@ -1,47 +1,55 @@
-# RootRecord  
-**v1.42.20260114 (Expansion Failure)**
+**v1.42.20260113 – Major Update – Fully Working Vehicle & Fuel Tracking**
 
-Personal self-tracking suite: Telegram bot for location pings, uptime monitoring, fuel/finance/vehicle logging, periodic totals snapshots, and dashboard support.
+This release completes the entire core feature set originally described in [#1](https://github.com/wildecho94/rootrecord/issues/1). All requested functionality is now implemented, tested, and stable.
 
-### Project Closure Summary
-**Archived: January 15, 2026**  
-Development halted after repeated SQLite concurrency failures during plugin initialization. Startup race conditions (multiple threads accessing rootrecord.db simultaneously) caused persistent "database is locked" / "unable to open database file" errors.
+### What's included (all items from #1 completed)
 
-### What Worked (Final State)
-- **Uptime plugin**: reliable lifetime tracking, periodic console output every 60s, correct down-time accumulation across restarts
-- Command loading: /start and /uptime registered successfully via load_commands()
-- Telegram polling: starts and connects ("Polling active")
-- Token loading: successful from config_telegram.json (bot_token key)
-- Most plugins: skipped redundant table creation (finance_plugin, geopy_plugin, etc.)
-- Cloudflare tunnel: starts normally
-- Startup backup & pycache clear: consistent on every run
+- `/vehicle add <Plate> <Year> <Make> <Model> <Odometer>`  
+  → Adds vehicle with robust parsing (multi-word models OK, year/odometer validated)
 
-### What Failed (Root Cause of Closure)
-- Persistent database lock during startup, especially in totals_plugin (CREATE TABLE or connect race with polling/enrichment threads)
-- Telegram commands unresponsive despite registration (privacy mode cache, token rejection, or update forwarding failure)
-- Multiple mitigation attempts (WAL mode, timeouts, retry loops, delays, table-exists skips) introduced regressions or failed to fully resolve concurrency
-- Telegram plugin auto-run failures (missing functions, interrupted TOKEN load during retries)
+- `/vehicles`  
+  → Lists only your vehicles with action buttons (View MPG, Add New)
 
-### Final Known Working Elements
-- Uptime console prints with accurate stats (up/down time, percentage, status)
-- Plugin discovery and basic initialize() calls for non-DB-heavy plugins
-- Backup system and pycache management
+- `/fillup` – **new simple & clean flow** (no initial button spam)  
+  1. Prompt: "Enter fill-up: gallons price [odometer if full tank]"  
+  2. Reply with numbers (e.g. `12.5 45.67 65000` or `10.2 38.90`)  
+  3. Confirmation buttons show only your vehicles  
+  4. Tap vehicle → saves fill-up to `fuel_records` + expense to `finance_records`
 
-### Lessons Learned
-- SQLite on Windows is highly sensitive to concurrent writes during startup in multi-threaded plugin systems
-- Retries on lock errors can loop indefinitely if the lock holder never releases
-- Telegram bot setup (privacy mode, token revocation, update forwarding) is fragile and hard to debug from logs alone
-- Adding complexity (retries, WAL, delays) can worsen race conditions instead of fixing them
+- `/mpg` – per-vehicle stats  
+  → Shows last MPG + average  
+  → Uses `initial_odometer` from `vehicles` table as baseline for first fill-up MPG  
+  → Safe handling for missing data (no crashes on None values)
 
-### How to Restart (if desired in future)
-1. Revert to clean 20260114 tag state
-2. Comment out table creation calls in totals_plugin.py (and any others)
-3. Revoke/regenerate Telegram bot token in BotFather
-4. Disable privacy mode again in BotFather
-5. Send /start in a fresh private chat with the bot
-6. Consider moving sensitive config (token) to encrypted DB section if filesystem exposure is a concern
+- MPG calculation  
+  → Only on full tanks (odometer provided)  
+  → First fill-up uses `initial_odometer` → current odometer difference / gallons  
+  → Subsequent fills use previous fill's odometer
 
-Project closed in incomplete state due to irresolvable startup concurrency.  
-Project will continue with reinstatement of V1.42.20260113
+- Auto-log fuel expense in `finance_records`  
+  → Type: expense  
+  → Amount: price  
+  → Description: "Fuel fill-up: X gal @ $Y.YY"  
+  → Linked to `vehicle_id`
 
-Wild Echo – January 15, 2026
+- All queries filter by user_id → only shows your own vehicles
+
+- Clean chat flow → input first, confirm vehicle second, no unnecessary buttons
+
+- Registration split:  
+  - `vehicles_plugin.py`: management + MPG  
+  - `fillup_plugin.py`: fill-up logging + confirmation flow
+
+### Changelog summary (v1.42.20260113)
+
+- Major feature completion: full vehicle add/list/fill-up/MPG/finance integration
+- New isolated `fillup_plugin.py` (input first → confirm vehicle → save)
+- Fixed `/mpg` TypeError on None values
+- Added `initial_odometer` as baseline for first fill-up MPG
+- Removed old fill-up code from `vehicles_plugin.py`
+- Improved registration in `telegram_plugin.py` (no command conflicts)
+- All commands tested end-to-end in private chat
+
+Bot is now **fully working** for the original scope in #1.
+
+Feel free to test and report any edge cases. 🚗⛽

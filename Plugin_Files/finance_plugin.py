@@ -5,48 +5,62 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 ROOT = Path(__file__).parent.parent
 DB_PATH = ROOT / "data" / "rootrecord.db"
 
-# No init_db() needed since table already exists
+def init_db():
+    print("[finance_plugin] Creating/updating finance_records table...")
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        # Base table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS finance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,          -- expense, income, debt, asset
+                amount REAL NOT NULL,
+                description TEXT,
+                category TEXT DEFAULT 'Uncategorized',
+                timestamp TEXT NOT NULL,
+                received_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        # Add vehicle_id column if missing (for fuel expenses)
+        try:
+            c.execute("ALTER TABLE finance_records ADD COLUMN vehicle_id INTEGER")
+            print("[finance_plugin] Added vehicle_id column to finance_records")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        c.execute('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)')
+        conn.commit()
+    print("[finance_plugin] Finance table ready")
 
 def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
             INSERT INTO finance_records (type, amount, description, category, timestamp, vehicle_id)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (type_, amount, desc, cat, datetime.utcnow().isoformat(), vehicle_id))
         conn.commit()
+    print(f"[finance] Logged {type_}: ${amount:.2f} - {desc}")
 
-def get_balance():
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        c = conn.cursor()
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
-        income = c.fetchone()[0] or 0
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
-        expense = c.fetchone()[0] or 0
-        return income - expense
-
-def get_networth():
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
-        c = conn.cursor()
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income' OR type = 'asset'")
-        assets = c.fetchone()[0] or 0
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense' OR type = 'debt'")
-        liabilities = c.fetchone()[0] or 0
-        return assets - liabilities
-
-async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if not args:
-        await update.message.reply_text("Usage: /finance <operation> [amount] [description] [category]\nOperations: expense, income, debt, asset, balance, networth")
+        await update.message.reply_text(
+            "Usage:\n"
+            "/finance expense <amount> <desc> [category]\n"
+            "/finance income <amount> <desc> [category]\n"
+            "/finance debt <amount> <desc> [category]\n"
+            "/finance asset <amount> <desc> [category]\n"
+            "/finance balance\n"
+            "/finance networth"
+        )
         return
 
     sub = args[0].lower()
-
     if sub in ('balance', 'networth'):
         if sub == 'balance':
             bal = get_balance()
@@ -75,5 +89,24 @@ async def cmd_finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Unknown operation. Use expense, income, debt, asset, balance, networth.")
 
+def get_balance():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
+        income = c.fetchone()[0] or 0
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
+        expense = c.fetchone()[0] or 0
+        return income - expense
+
+def get_networth():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income' OR type = 'asset'")
+        assets = c.fetchone()[0] or 0
+        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense' OR type = 'debt'")
+        liabilities = c.fetchone()[0] or 0
+        return assets - liabilities
+
 def initialize():
-    print("[finance_plugin] Initialized – /finance ready (table already exists)")
+    init_db()
+    print("[finance_plugin] Initialized – /finance ready")

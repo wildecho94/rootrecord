@@ -20,7 +20,7 @@ def calculate_mpg_for_vehicle(vehicle_id: int):
     Calculate last MPG and average MPG for a vehicle based on full-tank fill-ups.
     Returns (last_mpg, avg_mpg) or (None, None) if not enough data.
     """
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
             SELECT fill_id, odometer, gallons, fill_date
@@ -53,7 +53,7 @@ def calculate_mpg_for_vehicle(vehicle_id: int):
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
             SELECT v.vehicle_id, v.plate, v.year, v.make, v.model

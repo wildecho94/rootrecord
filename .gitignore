@@ -20,6 +20,3 @@ config_*.json
 
 # Logs - exclude from git
 debug_rootrecord.log
-#web
-cloudflared.exe
-cloudflared-config.yml

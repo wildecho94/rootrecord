@@ -2,7 +2,6 @@
 # Simple fill-up: gallons + price + optional odometer → confirm vehicle → save
 
 import sqlite3
-import time
 from datetime import datetime
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -53,13 +52,9 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     }
 
     user_id = update.effective_user.id
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        c.execute('''
-            SELECT vehicle_id, plate, year, make, model
-            FROM vehicles
-            WHERE user_id = ?
-        ''', (user_id,))
+        c.execute("SELECT vehicle_id, plate, year, make, model FROM vehicles WHERE user_id=?", (user_id,))
         vehicles = c.fetchall()
 
     if not vehicles:
@@ -70,27 +65,22 @@ async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = []
     for v in vehicles:
         vid, plate, year, make, model = v
-        keyboard.append([InlineKeyboardButton(
-            f"{year} {make} {model} ({plate})",
-            callback_data=f"fillup_confirm_{vid}"
-        )])
+        button_text = f"{year} {make} {model} ({plate})"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"fillup_confirm_{vid}")])
 
     keyboard.append([InlineKeyboardButton("Cancel", callback_data="fillup_cancel")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.message.reply_text(
-        "Select vehicle for this fill-up:",
-        reply_markup=reply_markup
-    )
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Which vehicle?", reply_markup=reply_markup)
 
 async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    data = query.data
 
+    data = query.data
     if data == "fillup_cancel":
+        await query.edit_message_text("Cancelled.")
         context.user_data.pop("fillup_data", None)
-        await query.edit_message_text("Fill-up cancelled.")
         return
 
     if not data.startswith("fillup_confirm_"):
@@ -108,12 +98,12 @@ async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_
     is_full = fillup_data["is_full"]
 
     fill_date = datetime.utcnow().isoformat()
-    with sqlite3.connect(DB_PATH, timeout=10) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''
             INSERT INTO fuel_records (vehicle_id, user_id, odometer, gallons, price, fill_date, is_full_tank)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (vehicle_id, query.from_user.id, odometer, gallons, price, fill_date, 1 if is_full else 0))
+        ''', (vehicle_id, update.effective_user.id, odometer, gallons, price, fill_date, 1 if is_full else 0))
 
         description = f"Fuel fill-up: {gallons} gal @ ${price:.2f}"
         c.execute('''
