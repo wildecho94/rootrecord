@@ -1,5 +1,5 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Fixed extra expenses detection + debug logging
+# Version: 20260115 – Removed extra expenses / finance_records query, kept fuel-only stats
 
 import sqlite3
 from pathlib import Path
@@ -155,21 +155,15 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_reply(update, "No vehicles found. Add one with /vehicle add first.")
         return
 
-    text = "**Vehicle Cost & MPG Statistics (Cumulative – all fills included)**\n"
+    text = "**Vehicle Fuel & MPG Statistics (Cumulative – all fills included)**\n"
     if is_from_button:
         text += "_(from vehicle list)_\n"
     text += "───────────────\n\n"
     has_data = False
 
-    expense_categories = [
-        "fuel", "rental", "cleaners", "maintenance", "insurance", "repairs", "phone",
-        "registration", "tires", "parking", "tolls", "storage"
-    ]
-
     for veh in vehicles:
         vid, plate, year, make, model, initial_odo = veh
 
-        # Fuel fill-ups
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             c.execute('''
@@ -201,45 +195,19 @@ async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         overall_mpg = total_miles / total_gallons
         fuel_cost_per_mile = total_fuel_cost / total_miles if total_miles > 0 else 0
 
-        # Extra expenses from finance_records – more flexible matching
-        with sqlite3.connect(DB_PATH) as conn:
-            c = conn.cursor()
-            placeholders = ' OR '.join('LOWER(category) LIKE ?' for _ in expense_categories)
-            params = [f"%{cat.lower()}%" for cat in expense_categories]
-            c.execute(f'''
-                SELECT SUM(amount), COUNT(*), GROUP_CONCAT(DISTINCT category)
-                FROM finance_records
-                WHERE vehicle_id = ?
-                  AND type = 'expense'
-                  AND amount > 0
-                  AND category IS NOT NULL
-                  AND ({placeholders})
-            ''', [vid] + params)
-            row = c.fetchone()
-            extra_expenses = row[0] or 0.0
-            count_exp = row[1] or 0
-            matched_cats = row[2] or "none"
-
-        print(f"[MPG DEBUG] Vehicle {plate} ({vid}): Found {count_exp} expense entries matching categories: {matched_cats}, total ${extra_expenses:.2f}")
-
-        total_cost = total_fuel_cost + extra_expenses
-        total_cost_per_mile = total_cost / total_miles if total_miles > 0 else 0
-
         text += f"**{year} {make} {model} ({plate})**\n"
         text += f"  • Overall MPG: **{overall_mpg:.1f}**\n"
         text += f"  • Total miles driven: **{total_miles}** mi\n"
         text += f"  • Total fuel added: **{total_gallons:.2f}** gal\n"
         text += f"  • Total fuel cost: **${total_fuel_cost:.2f}**\n"
         text += f"  • Fuel cost per mile: **${fuel_cost_per_mile:.3f}**\n"
-        text += f"  • Other tracked expenses: **${extra_expenses:.2f}** ({count_exp} entries: {matched_cats})\n"
-        text += f"  • **Total cost per mile**: **${total_cost_per_mile:.3f}** (fuel + tracked categories)\n"
         text += f"  • Fills counted: {len(fills)}\n"
         text += f"  • Period: {fills[0][3].split('T')[0]} to {fills[-1][3].split('T')[0]}\n\n"
 
         has_data = True
 
     if not has_data:
-        text += "No usable data yet. Add fill-ups and expenses with vehicle_id linked."
+        text += "No usable data yet. Add fill-ups with realistic odometer values."
 
     await send_reply(update, text, parse_mode="Markdown")
 
@@ -253,4 +221,4 @@ async def send_reply(update: Update, text: str, reply_markup=None, parse_mode=No
 
 def initialize():
     init_db()
-    print("[vehicles_plugin] Initialized – vehicle management + full cost stats ready")
+    print("[vehicles_plugin] Initialized – vehicle management + fuel-only stats ready")
