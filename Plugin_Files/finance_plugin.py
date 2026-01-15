@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Migrated to PostgreSQL (async, single DB, no locks)
+# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks)
 
 import asyncio
 from datetime import datetime
@@ -8,28 +8,28 @@ from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from core.db_postgres import get_db, init_postgres  # Shared local Postgres helper
+from core.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper
 
 ROOT = Path(__file__).parent.parent
 
 async def init_db():
-    print("[finance_plugin] Creating/updating finance_records table in PostgreSQL...")
+    print("[finance_plugin] Creating/updating finance_records table in MySQL...")
     async for session in get_db():
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS finance_records (
-                id SERIAL PRIMARY KEY,
-                type TEXT NOT NULL,
-                amount REAL NOT NULL,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                type VARCHAR(50) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
                 description TEXT,
-                category TEXT DEFAULT 'Uncategorized',
-                timestamp TIMESTAMP NOT NULL,
+                category VARCHAR(100) DEFAULT 'Uncategorized',
+                timestamp DATETIME NOT NULL,
                 received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                vehicle_id INTEGER
+                vehicle_id INT
             )
         '''))
         await session.execute(text('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)'))
         await session.commit()
-    print("[finance_plugin] Finance table ready in PostgreSQL")
+    print("[finance_plugin] Finance table ready in MySQL")
 
 async def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
     async for session in get_db():
@@ -198,50 +198,3 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
             FROM finance_records
             ORDER BY id DESC
             LIMIT 5
-        '''))
-        recent = recent.fetchall()
-
-    title = "Balance Report" if is_balance else "Net Worth Report"
-    main_val = balance if is_balance else net_worth
-    main_lbl = "Current Balance" if is_balance else "Current Net Worth"
-
-    text = f"**{title}**\n\n"
-    text += f"**{main_lbl}**: **${main_val:,.2f}**\n\n"
-
-    text += "**Overview**\n"
-    text += f"• Total Income: **${total_income:,.2f}**\n"
-    text += f"• Total Expenses: **${total_expense:,.2f}**\n"
-    text += f"• Total Assets: **${total_assets:,.2f}**\n"
-    text += f"• Total Debts: **${total_debt:,.2f}**\n\n"
-
-    if top_exp:
-        text += "**Top Expense Categories**\n"
-        for cat, amt in top_exp:
-            text += f"• {cat or 'Uncategorized'}: **${amt:,.2f}**\n"
-        text += "\n"
-    else:
-        text += "**No categorized expenses yet.**\n\n"
-
-    if recent:
-        text += "**Recent Activity (last 5)**\n"
-        for typ, amt, desc, cat, ts in recent:
-            cat_str = f" ({cat})" if cat and cat != 'Uncategorized' else ""
-            text += f"• {typ.capitalize()} ${amt:,.2f}{cat_str} – {desc[:50]}{'...' if len(desc)>50 else ''} ({ts.date()})\n"
-    else:
-        text += "**No transactions logged yet.**\n"
-
-    keyboard = [
-        [InlineKeyboardButton("Back to Menu", callback_data="fin_menu")],
-        [InlineKeyboardButton("Close", callback_data="fin_cancel")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-    else:
-        await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-
-def initialize():
-    asyncio.create_task(init_postgres())
-    asyncio.create_task(init_db())
-    print("[finance_plugin] Initialized – PostgreSQL ready")
