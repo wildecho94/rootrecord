@@ -11,18 +11,6 @@ from datetime import datetime
 import sqlite3
 import importlib.util
 import asyncio
-import time
-
-# Save original connect to avoid recursion
-_original_connect = sqlite3.connect
-
-def connect_with_wal(*args, **kwargs):
-    conn = _original_connect(*args, **kwargs)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    return conn
-
-# Safe override
-sqlite3.connect = connect_with_wal
 
 BASE_DIR = Path(__file__).parent
 
@@ -32,6 +20,7 @@ PLUGIN_FOLDER  = BASE_DIR / "Plugin_Files"
 
 FOLDERS = {
     "core":    CORE_FOLDER,
+    "handler": HANDLER_FOLDER,
     "plugin":  PLUGIN_FOLDER
 }
 
@@ -71,41 +60,58 @@ def backup_system():
     for name, folder in FOLDERS.items():
         if folder.exists():
             dest = backup_dir / name
-            shutil.copytree(folder, dest, ignore=shutil.ignore_patterns('*.zip'))
-            log_debug(f"  Backed up {name} (skipped .zip files)")
-    if DATA_FOLDER.exists():
-        data_dest = backup_dir / "data"
-        shutil.copytree(DATA_FOLDER, data_dest, ignore=shutil.ignore_patterns('*.zip'))
-        log_debug(f"  Backed up data folder (database + skipped .zip)")
+            shutil.copytree(folder, dest, ignore=shutil.ignore_patterns("*.zip"))
+            log_debug(f"Backed up {name} (skipped .zip files)")
+
+    data_dest = backup_dir / "data"
+    shutil.copytree(DATA_FOLDER, data_dest, ignore=shutil.ignore_patterns("*.zip"))
+    log_debug(f"Backed up data folder (database + skipped .zip)")
+
     log_debug("Backup completed")
 
 def prepare_folders():
-    for folder in FOLDERS.values():
-        folder.mkdir(exist_ok=True)
-        log_debug(f"✓ {folder.name}")
+    for name, folder in FOLDERS.items():
+        if not folder.exists():
+            folder.mkdir(parents=True)
+            log_debug(f"Created {name} folder")
+        else:
+            log_debug(f"✓ {name.capitalize()}_Files")
 
 def discover_plugins():
     plugins = {}
-    for folder in FOLDERS.values():
-        for path in folder.glob("*.py"):
-            if path.name.startswith('__'):
+    log_debug("\nDiscovered potential plugin(s):")
+
+    # Search ALL .py files in the entire project root and subfolders
+    for path in BASE_DIR.rglob("*.py"):
+        if (
+            path.name.startswith("__") or
+            path.name == "__init__.py" or
+            "Core_Files" in path.parts or
+            "Handler_Files" in path.parts or
+            "__pycache__" in path.parts or
+            "logs" in path.parts or
+            "backups" in path.parts or
+            "data" in path.parts
+        ):
+            continue
+
+        name = path.stem
+        try:
+            rel_path = path.relative_to(BASE_DIR)
+            module_name = ".".join(rel_path.with_suffix("").parts)
+            spec = importlib.util.spec_from_file_location(module_name, path)
+            if not spec:
                 continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
 
-            name = path.stem
-            module_name = f"{folder.name}.{name}"
-
-            try:
-                spec = importlib.util.spec_from_file_location(module_name, path)
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-
-                if hasattr(module, "initialize"):
-                    plugins[name] = module
-                    log_debug(f"{name} → initialize() found (path: {path})")
-                else:
-                    log_debug(f"{name} → skipped (no initialize())")
-            except Exception as e:
-                log_debug(f"Failed to load {path.name}: {e}")
+            if hasattr(module, "initialize"):
+                plugins[name] = module
+                log_debug(f"{name} → initialize() found (path: {path})")
+            else:
+                log_debug(f"{name} → skipped (no initialize())")
+        except Exception as e:
+            log_debug(f"Failed to load {path.name}: {e}")
 
     log_debug(f"────────────────────────────────────────────────────────────\n")
     log_debug(f"Total plugins loaded: {len(plugins)}\n")
@@ -114,25 +120,12 @@ def discover_plugins():
 
 def auto_run_plugins(plugins):
     for name, module in plugins.items():
-        max_attempts = 100
-        for attempt in range(max_attempts):
-            try:
-                if hasattr(module, "initialize"):
-                    module.initialize()
-                log_debug(f"→ {name} initialized")
-                break  # success
-            except Exception as e:
-                error_str = str(e).lower()
-                if "database is locked" in error_str or "unable to open database file" in error_str:
-                    if attempt < max_attempts - 1:
-                        log_debug(f"[retry] {name} failed (attempt {attempt+1}/{max_attempts}): {e} - retrying in 3s...")
-                        time.sleep(3)
-                        continue
-                    else:
-                        log_debug(f"Failed to auto-run {name} after {max_attempts} attempts: {e}")
-                else:
-                    log_debug(f"Failed to auto-run {name}: {e}")
-                    break  # non-lock error, no retry
+        try:
+            if hasattr(module, "initialize"):
+                module.initialize()
+            log_debug(f"→ {name} initialized")
+        except Exception as e:
+            log_debug(f"Failed to auto-run {name}: {e}")
 
 def initialize_system():
     os.system('cls' if os.name == 'nt' else 'clear')
