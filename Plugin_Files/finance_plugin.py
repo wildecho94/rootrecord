@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Fixed NameError in show_detailed_report + full reports
+# Version: 1.43.20260117 – Fixed reply input not received + detailed reports
 
 import sqlite3
 from datetime import datetime
@@ -43,7 +43,7 @@ def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id:
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (type_, amount, desc, cat, datetime.utcnow().isoformat(), vehicle_id))
         conn.commit()
-    print(f"[finance] Logged {type_}: ${amount:.2f} - {desc}")
+    print(f"[finance] Logged {type_}: ${amount:.2f} - {desc} (cat: {cat or 'Uncategorized'})")
 
 async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
@@ -151,7 +151,7 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
     args = text.split(maxsplit=2)
 
     if len(args) < 2:
-        await update.message.reply_text("Need amount and description.")
+        await update.message.reply_text("Need amount and description at minimum.")
         return
 
     try:
@@ -165,7 +165,7 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
 
     log_entry(entry_type, amount, desc, cat)
     await update.message.reply_text(
-        f"✅ **{entry_type.capitalize()}** of **${amount:.2f}** logged: {desc}",
+        f"✅ **{entry_type.capitalize()}** of **${amount:.2f}** logged: {desc}\n\nUse /finance for more actions.",
         parse_mode="Markdown"
     )
 

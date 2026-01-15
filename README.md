@@ -1,53 +1,57 @@
 # RootRecord
 
-**Personal tracking bot + dashboard**  
-RootRecord is a self-hosted Telegram bot + lightweight web dashboard for logging and analyzing personal data: GPS location pings (with reverse geocoding), vehicle fuel fill-ups (MPG & cost per mile), finance/expenses (tied to vehicles), system uptime, and more.
+**Personal tracking bot & dashboard**  
+RootRecord is a modular Telegram bot + Flask web dashboard for logging GPS pings (with reverse geocoding), vehicle fuel fill-ups (MPG & cost per mile), finance transactions, system uptime, and more.
 
-Built in Python with SQLite backend, modular plugins, python-telegram-bot, Flask, and Cloudflare Tunnel for easy exposure.
+- **Host machine**: Dell OptiPlex 7060 (Albuquerque, NM)
+- **CPU**: Intel Core i5-8500T @ 2.10 GHz (6 cores, 35W TDP)
+- **RAM**: 32 GB (31.8 GB usable)
+- **OS**: Windows 11 Pro 24H2 (build 26200.7623)
+- **Additional background services**:
+  - Full Litecoin (LTC) blockchain node (kept synced)
+  - Full Dogecoin (DOGE) blockchain node (kept synced)
+  - Both run continuously in the background
+- **Storage layout**:
+  - **C:** (Local Disk) – 118 GB flat M.2 SSD chip (moved from laptop, OS + program files, ~20 GB free)
+  - **D:** (Storage) – 1.81 TB portable SSD (recycled, connected via USB dock/enclosure)
+  - **L:** (Archive) – 3.63 TB large internal desktop SATA drive (2.10 TB free, direct to motherboard SATA port)
+  - **USB dock note**: Dual-slot enclosure supporting micro SSDs or full-size SATA drives (currently handling D:; L: is internal SATA)
 
-Current version: **1.42.20260115** (January 2026)
+Built in Python with SQLite, python-telegram-bot, Flask, Geopy, and Cloudflare Tunnel.
+
+Current version: **1.43.20260117**
 
 ## Features
 
-- **Telegram Bot**  
-  - Live location sharing → auto-saves GPS pings + reverse geocoding (via Geopy/Nominatim)  
-  - Vehicle management: add/list vehicles with plate, year, make, model, initial odometer  
-  - Fuel logging: gallons + price + optional odometer (full/partial tank) → auto-logs finance expense  
-  - MPG & cost stats: cumulative MPG, total fuel cost, fuel $/mile (all fill-ups included)  
-  - Finance tracking: /finance expense/income/debt/asset + balance/networth  
-  - Uptime monitoring: lifetime uptime %, crash/restart tracking  
-  - Inline buttons for vehicle selection & quick actions  
+### Telegram Bot
+- Live location → auto-save GPS + reverse geocode
+- Vehicle management: `/vehicles`, `/vehicle add`
+- Fuel logging: `/fillup` → auto expense log
+- MPG & fuel cost stats: `/mpg` → cumulative, total $/mile
+- Finance: `/finance` → inline button menu + detailed reports
+- Uptime: `/uptime` → lifetime stats
 
-- **Web Dashboard** (via Flask + Cloudflare Tunnel)  
-  - index.html served locally or via tunnel  
-  - /totals.json endpoint for live stats (users, pings, vehicles, fillups, finance entries, etc.)  
+### Web Dashboard
+- Flask serving `index.html` + `/totals.json`
+- Cloudflare Tunnel for public access
 
-- **Modular Plugin System**  
-  - Plugins auto-discovered & initialized from `Plugin_Files/*.py`  
-  - Easy to add new features (blank_plugin.py template included)  
+### Backend
+- SQLite (`data/rootrecord.db`)
+- Auto-backups on startup (skips `.db-shm`/`.db-wal` + `.zip`)
+- Plugin auto-discovery from `Plugin_Files/`
 
-- **Database**: SQLite (`data/rootrecord.db`)  
-  - Tables for gps_records, fuel_records, finance_records, vehicles, uptime, geopy_enriched, etc.  
+## Setup
 
-- **Reliability**  
-  - Auto-backups on startup (skips .zip files)  
-  - __pycache__ cleaning  
-  - Verbose logging to console + `logs/debug_rootrecord.log`  
+1. Clone repo
+2. `pip install python-telegram-bot geopy flask`
+3. Create `config_telegram.json` with bot token
+4. Run `start_rootrecord.bat`
 
-## Current Commands
+## Hardware Notes
 
-- `/start` – Welcome message  
-- `/vehicles` – List vehicles + inline buttons for details / MPG  
-- `/vehicle add <Plate> <Year> <Make> <Model> <Odometer>` – Add a vehicle  
-- `/fillup` – Log fuel fill-up (gallons price [odometer]) → vehicle selection  
-- `/mpg` – Cumulative MPG, fuel cost, $/mile stats for all vehicles  
-- `/finance expense <amount> <desc> [category]` – Log expense (also auto-logged from fillups)  
-- `/finance balance` / `/finance networth`  
-- `/uptime` – System lifetime uptime stats  
+- **Dell OptiPlex 7060** – low-power, reliable 24/7 host
+- **Blockchain nodes**: Full LTC and DOGE chains synced and running in background (adds significant disk I/O and storage usage – blockchains grow ~50–100 GB/year each)
+- **USB dock/enclosure** – dual-slot, handles D: recycled SSD
+- **L: drive** – large internal SATA drive for desktop (direct motherboard connection, bulk archive + possibly blockchain data)
 
-## Setup & Run
-
-1. Clone repo  
-   ```bash
-   git clone https://github.com/wildecho94/rootrecord.git
-   cd rootrecord
+MIT License @wildecho94
