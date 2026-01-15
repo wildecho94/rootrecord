@@ -1,4 +1,4 @@
-### Project Overview
+### Version Goal
 RootRecord is a Telegram bot integrated with a lightweight web dashboard for tracking GPS locations, vehicle management, fuel logging, MPG statistics, and personal finance. It's in beta (v1.42.20260114), with a focus on finance, fill-up, and MPG features as highest priority. The project structure includes core files for system initialization and scheduling, handler and plugin folders for modular extensions, a web component for the dashboard, and data/backups/logs for persistence. The GitHub release (tagged 20260114, dated January 14, 2026) describes it as a "checkpoint release" – a snapshot of the working state, with stable bot core but incomplete elements. No assets are provided in the release; it's commit-based (hash: 888f45ec55e8f455a0d7dde3988a0bff749e1114). The repository is owned by wildecho94, and the release emphasizes that nothing is marked "complete" due to known gaps.
 
 ### Code Structure and Components
