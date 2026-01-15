@@ -77,10 +77,10 @@ def calculate_and_save_totals():
     with sqlite3.connect(DB_PATH, timeout=10) as conn:
         c = conn.cursor()
 
-        try: c.execute("SELECT COUNT(DISTINCT user_id) FROM pings"); totals["total_users"] = c.fetchone()[0] or 0
+        try: c.execute("SELECT COUNT(DISTINCT user_id) FROM gps_records"); totals["total_users"] = c.fetchone()[0] or 0
         except: pass
 
-        try: c.execute("SELECT COUNT(*) FROM pings"); totals["total_pings"] = c.fetchone()[0] or 0
+        try: c.execute("SELECT COUNT(*) FROM gps_records"); totals["total_pings"] = c.fetchone()[0] or 0
         except: pass
 
         try: c.execute("SELECT COUNT(*) FROM vehicles"); totals["total_vehicles"] = c.fetchone()[0] or 0
