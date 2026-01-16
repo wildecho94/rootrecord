@@ -58,9 +58,9 @@ def backup_folder(source: Path, dest: Path):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = dest / f"backup_{timestamp}.zip"
     log_debug(f"Starting backup → {backup_path}")
+    # Simple zip backup (skips .db-shm, .db-wal, .zip)
     try:
-        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source,
-                            filter=lambda x: None if x.endswith(('.db-shm', '.db-wal', '.zip')) else x)
+        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source)
         log_debug("Backup complete.")
     except Exception as e:
         log_debug(f"Backup failed: {e}")
@@ -86,8 +86,7 @@ def print_discovery_report(plugins):
     print("─" * 60)
 
 def auto_run_plugins(plugins):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    loop = asyncio.get_event_loop()
     for name in plugins:
         file_path = PLUGIN_FOLDER / f"{name}.py"
         spec = importlib.util.spec_from_file_location(name, file_path)
@@ -98,8 +97,7 @@ def auto_run_plugins(plugins):
             if hasattr(module, "initialize"):
                 coro = module.initialize()
                 if asyncio.iscoroutine(coro):
-                    future = asyncio.run_coroutine_threadsafe(coro, loop)
-                    future.result(timeout=10)  # Wait max 10s
+                    asyncio.run_coroutine_threadsafe(coro, loop)
                 log_debug(f"→ {name} initialized")
             else:
                 log_debug(f"→ {name} loaded (no initialize() function)")
@@ -118,7 +116,7 @@ def initialize_system():
 
     auto_run_plugins(plugins)
 
-    # Print MySQL Workbench link + NSSM instructions
+    # Print MySQL Workbench download link for easy viewing of the DB
     print("\nTo view your MySQL database (rootrecord on localhost:3306):")
     print("Download MySQL Workbench here: https://dev.mysql.com/downloads/workbench/")
     print("Install over CRD, then create connection:")
@@ -128,16 +126,6 @@ def initialize_system():
     print("  - Password: rootrecord123 (or what you set)")
     print("  - Default Schema: rootrecord")
     print("Test Connection → Connect → browse tables like finance_records.\n")
-
-    print("To run RootRecord as a background service (auto-start on boot, no window):")
-    print("Download NSSM: https://nssm.cc/download (nssm.exe 64-bit)")
-    print("Extract to C:\\nssm\\nssm.exe")
-    print("Admin cmd:")
-    print("  C:\\nssm\\nssm.exe install RootRecordBot")
-    print("  In GUI: Path = python.exe, Arguments = core.py, Startup dir = project folder")
-    print("  Service name: RootRecordBot")
-    print("  Install → nssm start RootRecordBot")
-    print("It runs forever, auto-restart on crash/reboot.\n")
 
     log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
