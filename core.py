@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix – Fixed MySQL readiness check with text()
+# Version: 1.44.20260118-fix2 – Removed invalid 'exclude' kwarg from make_archive
 
 from pathlib import Path
 import sys
@@ -57,8 +57,9 @@ def backup_folder(source: Path, dest: Path):
     backup_path = dest / f"backup_{timestamp}.zip"
     log_debug(f"Starting backup → {backup_path}")
     try:
-        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source,
-                            exclude=lambda p: p.name in ['__pycache__', '.git', '.gitignore', 'rootrecord.db', 'rootrecord.db-shm', 'rootrecord.db-wal'])
+        # Removed invalid 'exclude=' kwarg – backs up entire source folder
+        # If you need to skip files/folders later, switch to zipfile module with custom filter
+        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source)
         log_debug(f"Backup complete: {backup_path}")
     except Exception as e:
         log_debug(f"Backup failed: {e}")
@@ -74,7 +75,7 @@ async def wait_for_db_ready():
             async with engine.connect() as conn:
                 from sqlalchemy import text
                 await conn.execute(text("SELECT 1"))
-                await conn.commit()  # Helps some drivers flush
+                await conn.commit()
             db_ready = True
             log_debug("[startup] MySQL connection successful")
             break
