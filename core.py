@@ -1,5 +1,5 @@
 # core.py
-# Version: 1.43.20260116 – Fixed plugin auto-run: use asyncio.run_coroutine_threadsafe for async initialize()
+# Version: 1.43.20260116 – Fixed async plugin init (run_coroutine_threadsafe + proper loop handling)
 
 from pathlib import Path
 import sys
@@ -86,7 +86,8 @@ def print_discovery_report(plugins):
     print("─" * 60)
 
 def auto_run_plugins(plugins):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     for name in plugins:
         file_path = PLUGIN_FOLDER / f"{name}.py"
         spec = importlib.util.spec_from_file_location(name, file_path)
@@ -95,11 +96,11 @@ def auto_run_plugins(plugins):
         spec.loader.exec_module(module)
         try:
             if hasattr(module, "initialize"):
-                # Run async initialize in the main loop safely from sync context
                 coro = module.initialize()
                 if asyncio.iscoroutine(coro):
+                    # Run async init safely in the loop
                     future = asyncio.run_coroutine_threadsafe(coro, loop)
-                    future.result(timeout=5)  # Wait for completion or timeout
+                    future.result(timeout=10)  # Wait max 10s
                 log_debug(f"→ {name} initialized")
             else:
                 log_debug(f"→ {name} loaded (no initialize() function)")
