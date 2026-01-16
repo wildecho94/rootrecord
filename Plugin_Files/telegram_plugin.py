@@ -1,9 +1,7 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 1.42.20260117 – Full Telegram bot integration
-# Fixed: Added geopy enrichment trigger after every location save
-#        Uses lastrowid to get ping_id and queues async enrich_ping task
-#        Cleaned altitude handling (Telegram provides none)
-#        Keeps verbose logging, polling, command loading, shutdown dispose
+# Version: 1.42.20260117 – FIXED: Removed non-existent 'altitude' and 'altitude_accuracy' columns from INSERT
+#          Now matches real gps_records table schema (no altitude fields from Telegram Location)
+#          Keeps geopy trigger on every successful save + verbose logging
 
 import asyncio
 import json
@@ -23,8 +21,7 @@ from telegram.ext import (
 from utils.db_mysql import get_db, engine
 from sqlalchemy import text
 
-# Import geopy enrichment function
-# Assumption: geopy_plugin.py defines async def enrich_ping(ping_id: int, lat: float, lon: float)
+# Import geopy enrichment
 from Plugin_Files.geopy_plugin import enrich_ping
 
 logging.basicConfig(
@@ -59,8 +56,6 @@ async def init_db():
                 longitude DOUBLE NOT NULL,
                 accuracy FLOAT,
                 heading FLOAT,
-                altitude FLOAT,
-                altitude_accuracy FLOAT,
                 timestamp DATETIME NOT NULL,
                 received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -78,6 +73,7 @@ async def init_db():
                 print("[telegram_plugin] Index idx_user_timestamp already exists")
             else:
                 print(f"[telegram_plugin] Index creation failed: {e}")
+    print("[telegram_plugin] gps_records table ready (no altitude columns)")
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loc = update.effective_message.location
@@ -96,13 +92,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id, username, first_name, last_name,
                 chat_id, message_id,
                 latitude, longitude, accuracy, heading,
-                altitude, altitude_accuracy,
                 timestamp
             ) VALUES (
                 :user_id, :username, :first_name, :last_name,
                 :chat_id, :message_id,
                 :latitude, :longitude, :accuracy, :heading,
-                :altitude, :altitude_accuracy,
                 :timestamp
             )
         '''), {
@@ -116,8 +110,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "longitude": lon,
             "accuracy": loc.horizontal_accuracy,
             "heading": loc.heading,
-            "altitude": None,               # Telegram Location has no altitude
-            "altitude_accuracy": None,
             "timestamp": datetime.utcnow().isoformat()
         })
         await session.commit()
@@ -125,10 +117,12 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ping_id = result.lastrowid
         print(f"[gps] Saved ping id={ping_id} for user {user.id}")
 
-    # Trigger geopy enrichment in background on every successful save
+    # Trigger enrichment only if save succeeded
     if ping_id:
         asyncio.create_task(enrich_ping(ping_id, lat, lon))
         print(f"[gps] Queued geopy enrichment task for ping {ping_id}")
+    else:
+        print("[gps] Save failed – no ping_id, skipping enrichment")
 
 async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message

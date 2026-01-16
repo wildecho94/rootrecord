@@ -8,6 +8,7 @@ from mysql.connector import Error
 from datetime import datetime
 
 from utils.db_mysql import config
+from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 
