@@ -27,3 +27,5 @@ mysql/
 *.db-wal
 *.lock
 *.pid
+# zips
+*.zip
