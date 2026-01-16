@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Migrated to self-hosted MySQL 9.5 (async, fixed syntax, no locks)
+# Version: 1.43.20260117 – Migrated to self-hosted MySQL 9.5 (async, fixed UnboundLocalError, no locks)
 
 import asyncio
 from datetime import datetime
@@ -174,6 +174,13 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data.pop(pending_key, None)
 
 async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYPE, is_balance: bool):
+    total_income = 0.0
+    total_expense = 0.0
+    total_assets = 0.0
+    total_debt = 0.0
+    top_exp = []
+    recent = []
+
     async for session in get_db():
         total_income = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'income'"))).scalar()
         total_expense = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'expense'"))).scalar()
@@ -183,7 +190,7 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
         balance = total_income - total_expense
         net_worth = (total_income + total_assets) - (total_expense + total_debt)
 
-        top_exp = await session.execute(text('''
+        top_exp_result = await session.execute(text('''
             SELECT category, SUM(amount) as total
             FROM finance_records
             WHERE type = 'expense' AND category IS NOT NULL
@@ -191,15 +198,15 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
             ORDER BY total DESC
             LIMIT 5
         '''))
-        top_exp = top_exp.fetchall()
+        top_exp = top_exp_result.fetchall()
 
-        recent = await session.execute(text('''
+        recent_result = await session.execute(text('''
             SELECT type, amount, description, category, timestamp
             FROM finance_records
             ORDER BY id DESC
             LIMIT 5
         '''))
-        recent = recent.fetchall()
+        recent = recent_result.fetchall()
 
     title = "Balance Report" if is_balance else "Net Worth Report"
     main_val = balance if is_balance else net_worth
