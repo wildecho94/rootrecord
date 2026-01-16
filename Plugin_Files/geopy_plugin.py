@@ -1,6 +1,11 @@
 # Plugin_Files/geopy_plugin.py
-# Version: 1.42.20260117 – Enhanced logging + exported enrich_ping for triggering
-# Now fully async, verbose prints, handles no previous ping gracefully
+# Version: 1.42.20260117 – Full updated version with fixes applied
+# Changes:
+#   - Fixed deprecation warning by using alias syntax in ON DUPLICATE KEY UPDATE
+#   - Verbose logging at every step
+#   - Async Nominatim call via to_thread
+#   - Graceful handling of no previous ping / geocoding failures
+#   - Exported async def enrich_ping(ping_id, lat, lon) for telegram_plugin to call
 
 import asyncio
 from datetime import datetime
@@ -8,7 +13,7 @@ from pathlib import Path
 from sqlalchemy import text
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
-from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+from geopy.exc import GeocoderTimedOut, GeocoderUnavailable, GeocoderServiceError
 
 from utils.db_mysql import get_db, init_mysql
 
@@ -48,10 +53,10 @@ async def init_db():
                 print("[geopy_plugin] Index idx_ping_id already exists")
             else:
                 print(f"[geopy_plugin] Index creation failed: {e}")
-    print("[geopy_plugin] Geopy table ready")
+    print("[geopy_plugin] Geopy enriched table and indexes ready")
 
 async def get_last_ping_location(ping_id: int):
-    """Get lat/lon of the previous ping for the same user (before this ping_id)"""
+    """Fetch lat/lon of the most recent ping before this one (same user implied via ordering)"""
     async for session in get_db():
         result = await session.execute(text('''
             SELECT latitude, longitude
@@ -62,19 +67,24 @@ async def get_last_ping_location(ping_id: int):
         '''), {"ping_id": ping_id})
         row = result.fetchone()
         if row:
+            print(f"[geopy] Found previous ping location: ({row[0]:.6f}, {row[1]:.6f})")
             return row[0], row[1]
+        else:
+            print("[geopy] No previous ping found – skipping distance calc")
     return None, None
 
 async def enrich_ping(ping_id: int, lat: float, lon: float):
     """
-    Main enrichment function – called after every new ping save.
-    Reverse geocodes + calculates distance from previous ping.
+    Enrichment entry point – called after every new gps_records insert.
+    Performs reverse geocoding + distance from prev ping.
+    Saves result to geopy_enriched.
     """
     print(f"[geopy] Starting enrichment for ping_id={ping_id} at ({lat:.6f}, {lon:.6f})")
 
     address = city = country = None
     distance_m = None
 
+    # Reverse geocode (run blocking Nominatim in thread to avoid blocking asyncio)
     try:
         location = await asyncio.to_thread(
             geolocator.reverse,
@@ -85,26 +95,31 @@ async def enrich_ping(ping_id: int, lat: float, lon: float):
         if location:
             raw = location.raw.get('address', {})
             address = location.address
-            city = raw.get('city') or raw.get('town') or raw.get('village') or 'Unknown'
+            city = raw.get('city') or raw.get('town') or raw.get('village') or raw.get('hamlet') or 'Unknown'
             country = raw.get('country', 'Unknown')
-            print(f"[geopy] Geocoded: {city}, {country} – {address[:80]}...")
+            print(f"[geopy] Geocoded successfully: {city}, {country}")
+            print(f"[geopy] Full address: {address[:120]}{'...' if len(address) > 120 else ''}")
         else:
-            print("[geopy] No geocoding result")
-    except (GeocoderTimedOut, GeocoderUnavailable) as e:
-        print(f"[geopy] Geocoder timeout/unavailable: {e}")
+            print("[geopy] Nominatim returned no result for this coordinate")
+    except GeocoderTimedOut:
+        print("[geopy] Geocoding timed out – skipping address")
+    except GeocoderUnavailable:
+        print("[geopy] Geocoding service unavailable – skipping address")
+    except GeocoderServiceError as e:
+        print(f"[geopy] Nominatim service error: {e}")
     except Exception as e:
-        print(f"[geopy] Geocoding error: {type(e).__name__}: {e}")
+        print(f"[geopy] Unexpected geocoding error: {type(e).__name__}: {e}")
 
-    # Distance from previous ping
+    # Calculate distance from previous ping
     prev_lat, prev_lon = await get_last_ping_location(ping_id)
     if prev_lat is not None and prev_lon is not None:
         try:
             distance_m = geodesic((prev_lat, prev_lon), (lat, lon)).meters
-            print(f"[geopy] Distance from previous ping: {distance_m:.0f} m")
+            print(f"[geopy] Distance from previous ping: {distance_m:.1f} meters")
         except Exception as e:
-            print(f"[geopy] Distance calc error: {e}")
+            print(f"[geopy] Distance calculation failed: {e}")
 
-    # Save enriched data
+    # Save to DB using alias syntax to avoid VALUES() deprecation warning
     try:
         async for session in get_db():
             await session.execute(text('''
@@ -116,12 +131,12 @@ async def enrich_ping(ping_id: int, lat: float, lon: float):
                     :ping_id, :latitude, :longitude,
                     :address, :city, :country,
                     :distance_m, NOW()
-                )
+                ) AS new
                 ON DUPLICATE KEY UPDATE
-                    address=VALUES(address),
-                    city=VALUES(city),
-                    country=VALUES(country),
-                    distance_m=VALUES(distance_m)
+                    address     = new.address,
+                    city        = new.city,
+                    country     = new.country,
+                    distance_m  = new.distance_m
             '''), {
                 "ping_id": ping_id,
                 "latitude": lat,
@@ -134,7 +149,7 @@ async def enrich_ping(ping_id: int, lat: float, lon: float):
             await session.commit()
         print(f"[geopy] SUCCESS: Enriched data saved/updated for ping {ping_id}")
     except Exception as e:
-        print(f"[geopy] Save failed: {e}")
+        print(f"[geopy] Failed to save enriched data for ping {ping_id}: {e}")
 
 def initialize():
     asyncio.create_task(init_mysql())
