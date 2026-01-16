@@ -1,6 +1,6 @@
 # RootRecord core.py
 # Version: 1.43.20260116 – Fixed async plugin init (loop starts first), lowercase utils folder
-# Backup completely removed (no sqlite or other backups)
+# Backup completely removed as requested
 
 from pathlib import Path
 import sys
@@ -10,6 +10,7 @@ import sqlite3
 import importlib.util
 import asyncio
 import time
+import shutil  # Added missing import for rmtree in clear_pycache
 
 BASE_DIR = Path(__file__).parent
 
@@ -111,7 +112,7 @@ def initialize_system():
     ensure_data_folder()
     clear_pycache()
     
-    # No backup for sqlite or anything else
+    # No backup for sqlite or anything else - completely removed
     log_debug("RootRecord initialization complete (MySQL mode)")
 
 if __name__ == "__main__":
