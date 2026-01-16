@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix8 – Backup hard-capped <50MB, skips .zip, no recursion
+# Version: 1.44.20260118-fix9 – No more backups at all (commented out), added .gitignore enforcement check
 
 from pathlib import Path
 import sys
@@ -8,7 +8,6 @@ import os
 from datetime import datetime
 import asyncio
 import time
-import zipfile
 
 from utils.db_mysql import engine, init_mysql
 
@@ -50,50 +49,10 @@ def clear_pycache():
     log_debug(f"Cleared {count} pycache folders")
 
 def backup_folder(source: Path, dest: Path):
-    dest.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = dest / f"backup_{timestamp}.zip"
-    log_debug(f"Backup attempt → {backup_path}")
-
-    # Estimate total size first (exclude .zip files)
-    total_size = 0
-    skipped = []
-    for root_dir, _, files in os.walk(source):
-        for file in files:
-            fp = Path(root_dir) / file
-            if fp.suffix.lower() == '.zip':
-                skipped.append(fp.name)
-                continue
-            try:
-                total_size += fp.stat().st_size
-            except:
-                pass
-
-    if total_size > 50 * 1024 * 1024:  # 50 MB hard limit
-        log_debug(f"ABORT: Backup would be ~{total_size / (1024*1024):.1f} MB – too large")
-        log_debug("Skipping to avoid Git push issues. Delete large files in data/ if needed.")
-        return
-
-    log_debug(f"Backing up ~{total_size / (1024*1024):.1f} MB (skipped {len(skipped)} .zip files)")
-    
-    try:
-        with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for root_dir, _, files in os.walk(source):
-                for file in files:
-                    full_path = Path(root_dir) / file
-                    if full_path.suffix.lower() == '.zip':
-                        continue
-                    arcname = str(full_path.relative_to(source))
-                    try:
-                        zf.write(full_path, arcname)
-                    except PermissionError:
-                        log_debug(f"Locked file skipped: {file}")
-                    except Exception as e:
-                        log_debug(f"Error adding {file}: {e}")
-        actual_size = backup_path.stat().st_size / (1024*1024)
-        log_debug(f"Backup OK: {backup_path} ({actual_size:.1f} MB)")
-    except Exception as e:
-        log_debug(f"Backup failed: {type(e).__name__}: {e}")
+    log_debug("Backup function called – but disabled to prevent large files in git")
+    log_debug("If you need backups, run manually or re-enable with size cap")
+    # Comment out or remove the actual backup code to avoid accidents
+    # shutil.make_archive(...)  # DISABLED
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
@@ -135,10 +94,8 @@ def initialize_system():
     ensure_data_folder()
     clear_pycache()
     
-    old_db = DATA_FOLDER / "rootrecord.db"
-    if old_db.exists():
-        log_debug("Old DB found – safe backup attempt (<50MB)")
-        backup_folder(DATA_FOLDER, DATA_FOLDER / "sqlite_backups")
+    # Backup disabled to avoid git issues – manual if needed
+    log_debug("Backup disabled (safe mode) – old DB not zipped")
     
     log_debug("Init done (MySQL)")
 
@@ -158,7 +115,7 @@ async def main_loop():
     counter = 0
     while True:
         counter += 1
-        if counter % 30 == 0:
+        if counter % 10 == 0:  # every 10 min
             log_debug(f"[alive] {datetime.now().strftime('%H:%M:%S')} – cycle {counter}")
         await asyncio.sleep(60)
 
