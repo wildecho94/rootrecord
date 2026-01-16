@@ -1,14 +1,16 @@
 # Plugin_Files/telegram_plugin.py
-# Fixed: added missing datetime import, removed invalid location attributes, no extra init_mysql call
-# New Fix for v1.42: Removed Thread start from initialize() — now bot_main() is called externally for main loop integration
-# Added await engine.dispose() in shutdown for clean connection pool return
+# Version: 1.42.20260117 – Full Telegram bot integration
+# Fixed: Added geopy enrichment trigger after every location save
+#        Uses lastrowid to get ping_id and queues async enrich_ping task
+#        Cleaned altitude handling (Telegram provides none)
+#        Keeps verbose logging, polling, command loading, shutdown dispose
 
 import asyncio
 import json
 import importlib.util
 import logging
 from pathlib import Path
-from datetime import datetime  # FIXED: added for timestamp in location save
+from datetime import datetime
 
 from telegram import Update
 from telegram.ext import (
@@ -18,8 +20,12 @@ from telegram.ext import (
     filters,
 )
 
-from utils.db_mysql import get_db, engine  # Added engine import for dispose
+from utils.db_mysql import get_db, engine
 from sqlalchemy import text
+
+# Import geopy enrichment function
+# Assumption: geopy_plugin.py defines async def enrich_ping(ping_id: int, lat: float, lon: float)
+from Plugin_Files.geopy_plugin import enrich_ping
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -79,10 +85,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     msg = update.effective_message
 
-    print(f"[gps] Received ping: lat={loc.latitude}, lon={loc.longitude}")
+    lat = loc.latitude
+    lon = loc.longitude
+    print(f"[gps] Received location: lat={lat:.6f}, lon={lon:.6f}")
 
+    ping_id = None
     async for session in get_db():
-        await session.execute(text('''
+        result = await session.execute(text('''
             INSERT INTO gps_records (
                 user_id, username, first_name, last_name,
                 chat_id, message_id,
@@ -103,20 +112,28 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "last_name": user.last_name,
             "chat_id": chat.id,
             "message_id": msg.message_id,
-            "latitude": loc.latitude,
-            "longitude": loc.longitude,
+            "latitude": lat,
+            "longitude": lon,
             "accuracy": loc.horizontal_accuracy,
             "heading": loc.heading,
-            "altitude": loc.live_period if hasattr(loc, 'live_period') else None,  # Adjusted, no altitude
-            "altitude_accuracy": None,  # No such attr, set None
+            "altitude": None,               # Telegram Location has no altitude
+            "altitude_accuracy": None,
             "timestamp": datetime.utcnow().isoformat()
         })
         await session.commit()
 
-    print(f"[gps] Saved ping for user {user.id}")
+        ping_id = result.lastrowid
+        print(f"[gps] Saved ping id={ping_id} for user {user.id}")
+
+    # Trigger geopy enrichment in background on every successful save
+    if ping_id:
+        asyncio.create_task(enrich_ping(ping_id, lat, lon))
+        print(f"[gps] Queued geopy enrichment task for ping {ping_id}")
 
 async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"[telegram_plugin] Message: {update.effective_message.text}")
+    msg = update.effective_message
+    text = msg.text or "[non-text message]"
+    print(f"[telegram_plugin] Received from {update.effective_user.id}: {text}")
 
 def load_commands(application: Application):
     folder = COMMANDS_DIR
@@ -184,7 +201,7 @@ async def bot_main():
     )
     print("[telegram_plugin] Polling active")
 
-    await asyncio.Event().wait()  # Keeps running until cancelled
+    await asyncio.Event().wait()
 
 async def shutdown_bot():
     global application
@@ -193,7 +210,7 @@ async def shutdown_bot():
         await application.updater.stop()
         await application.stop()
         await application.shutdown()
-        await engine.dispose()  # Explicitly dispose engine to return all connections
+        await engine.dispose()
         print("[telegram_plugin] Engine disposed, connections returned to pool")
 
 def initialize():

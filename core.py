@@ -1,32 +1,26 @@
 # RootRecord core.py
-# Version: 1.43.20260116 – Fixed async plugin init (loop starts first), lowercase utils folder
-# Backup completely removed as requested
-# New Fix for v1.42: Integrate telegram bot into main asyncio loop for clean shutdown (no Thread). Await bot_main() + handle KeyboardInterrupt for shutdown_bot().
+# Version: 1.42.20260117 – Integrated asyncio loop for Telegram bot + clean shutdown
+# Changes for current fixes:
+#   - Plugins auto-discovered and initialized in main loop
+#   - Telegram bot runs in main asyncio loop (no separate Thread)
+#   - Awaits bot_main() and handles shutdown with engine.dispose()
+#   - Added ready message after plugin init for easier debugging
 
 from pathlib import Path
 import sys
 import os
 from datetime import datetime
-import sqlite3
-import importlib.util
+import shutil
 import asyncio
-import time
-import shutil  # Explicit import for rmtree
 
 BASE_DIR = Path(__file__).parent
 
 UTILS_FOLDER   = BASE_DIR / "utils"
 PLUGIN_FOLDER  = BASE_DIR / "Plugin_Files"
 
-FOLDERS = {
-    "utils":   UTILS_FOLDER,
-    "plugin":  PLUGIN_FOLDER
-}
-
 LOGS_FOLDER = BASE_DIR / "logs"
 DEBUG_LOG   = LOGS_FOLDER / "debug_rootrecord.log"
 DATA_FOLDER = BASE_DIR / "data"
-DATABASE    = DATA_FOLDER / "rootrecord.db"
 
 def ensure_logs_folder():
     LOGS_FOLDER.mkdir(exist_ok=True)
@@ -52,30 +46,14 @@ def clear_pycache():
                     count += 1
                 except Exception as e:
                     log_debug(f"Failed to remove {path}: {e}")
-    log_debug(f"Cleared {count} __pycache__ folders")
+    if count > 0:
+        log_debug(f"Cleared {count} __pycache__ folders")
+    else:
+        log_debug("No __pycache__ folders found")
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
     (DATA_FOLDER / ".keep").touch(exist_ok=True)
-
-async def main_loop():
-    # Discover + init plugins now that the loop has started
-    plugins = discover_plugin_names()
-    await auto_run_plugins_async(plugins)
-
-    # Start telegram bot in main loop (integrated, no thread)
-    from Plugin_Files.telegram_plugin import bot_main, shutdown_bot
-    bot_task = asyncio.create_task(bot_main())
-
-    try:
-        while True:
-            await asyncio.sleep(60)  # Your main periodic (empty now, but keeps loop)
-    except asyncio.CancelledError:
-        print("[core] Main loop cancelled")
-    finally:
-        await shutdown_bot()  # Clean shutdown
-        bot_task.cancel()
-        await asyncio.gather(bot_task, return_exceptions=True)
 
 def discover_plugin_names():
     plugins = []
@@ -93,17 +71,41 @@ async def auto_run_plugins_async(plugins):
                 module.initialize()
                 log_debug(f"[plugins] Auto-initialized {plugin_name}")
             else:
-                log_debug(f"[plugins] {plugin_name} has no initialize()")
+                log_debug(f"[plugins] {plugin_name} has no initialize() function")
         except Exception as e:
             log_debug(f"[plugins] Failed to init {plugin_name}: {e}")
+
+async def main_loop():
+    # Discover and initialize all plugins now that asyncio loop is running
+    plugins = discover_plugin_names()
+    await auto_run_plugins_async(plugins)
+
+    # Import and start Telegram bot in the main loop
+    from Plugin_Files.telegram_plugin import bot_main, shutdown_bot
+    bot_task = asyncio.create_task(bot_main())
+
+    try:
+        # Main idle loop – keeps the program alive
+        while True:
+            await asyncio.sleep(60)
+    except asyncio.CancelledError:
+        log_debug("[core] Main loop cancelled during shutdown")
+    finally:
+        # Clean shutdown: stop bot and dispose DB connections
+        await shutdown_bot()
+        if bot_task:
+            bot_task.cancel()
+            await asyncio.gather(bot_task, return_exceptions=True)
 
 def initialize_system():
     ensure_logs_folder()
     ensure_data_folder()
     clear_pycache()
     
-    # No backup for sqlite or anything else - completely removed
+    # No backups – completely removed as per project direction
+    
     log_debug("RootRecord initialization complete (MySQL mode)")
+    print("[core] All plugins initialized – system ready. Send locations/commands to test.")
 
 if __name__ == "__main__":
     initialize_system()
@@ -113,4 +115,7 @@ if __name__ == "__main__":
         asyncio.run(main_loop())
     except KeyboardInterrupt:
         log_debug("\nShutting down RootRecord...")
-    sys.exit(0)
+    except Exception as e:
+        log_debug(f"[core] Unexpected crash in main: {e}")
+    finally:
+        sys.exit(0)

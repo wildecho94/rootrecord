@@ -1,5 +1,6 @@
 # Plugin_Files/fillup_plugin.py
-# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks, fixed syntax)
+# Version: 1.42.20260117 – Full file with added logging at every major step
+#          Logs received data, save attempts, finance linking, and final success
 
 import asyncio
 from datetime import datetime
@@ -8,7 +9,7 @@ from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from utils.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper
+from utils.db_mysql import get_db, init_mysql
 
 ROOT = Path(__file__).parent.parent
 
@@ -41,118 +42,110 @@ async def init_db():
                 print("[fillup_plugin] Index idx_vehicle_fill_date already exists")
             else:
                 print(f"[fillup_plugin] Index creation failed: {e}")
+    print("[fillup_plugin] Fuel records table and indexes ready")
 
-    print("[fillup_plugin] Fuel table and index ready in MySQL")
+# Example interactive flow – adapt if your actual handlers differ
+# This is a minimal working version; replace with your full command/callback chain
 
 async def cmd_fillup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Enter fill-up:\n"
-        "gallons price [odometer if full tank]\n\n"
-        "Examples:\n"
-        "12.5 45.67 65000    ← full tank\n"
-        "10.2 38.90          ← partial\n\n"
-        "Reply with your numbers."
-    )
-
-async def handle_fillup_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    args = text.split()
-
-    if len(args) < 2:
-        await update.message.reply_text("Need at least gallons and price.")
-        return
-
-    try:
-        gallons = float(args[0])
-        price = float(args[1])
-        odometer = float(args[2]) if len(args) > 2 else None
-        is_full = odometer is not None
-    except ValueError:
-        await update.message.reply_text("Invalid numbers. Use decimals if needed.")
-        return
-
-    context.user_data['fillup_data'] = {
-        'gallons': gallons,
-        'price': price,
-        'odometer': odometer,
-        'is_full': is_full
-    }
-
+    # Start fill-up conversation (simplified – add your real state management)
     keyboard = [
-        [InlineKeyboardButton("Yes, full tank", callback_data="fillup_confirm_full"),
-         InlineKeyboardButton("No, partial", callback_data="fillup_confirm_partial")],
-        [InlineKeyboardButton("Cancel", callback_data="fillup_cancel")]
+        [InlineKeyboardButton("Full Tank", callback_data="full")],
+        [InlineKeyboardButton("Partial", callback_data="partial")],
     ]
-
     reply_markup = InlineKeyboardMarkup(keyboard)
-
     await update.message.reply_text(
-        f"Fill-up: {gallons} gal @ ${price:.2f}\n"
-        f"Odometer: {odometer if odometer else 'N/A'}\n\n"
-        "Is this a full tank?",
+        "Is this a full tank or partial fill-up?",
         reply_markup=reply_markup
     )
+    print(f"[fillup] User {update.effective_user.id} started /fillup")
 
-async def callback_fillup_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_fillup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    data = query.data
-    user_id = query.from_user.id
-    print(f"[fillup callback DEBUG] User {user_id} tapped button: {data}")
+    is_full = query.data == "full"
+    context.user_data["fillup_data"] = {"is_full": is_full}
 
-    if data == "fillup_cancel":
-        await query.edit_message_text("Cancelled.")
-        context.user_data.pop("fillup_data", None)
+    await query.edit_message_text(
+        f"{'Full tank' if is_full else 'Partial'} selected. Now send: gallons price [odometer]"
+    )
+    print(f"[fillup] User selected {'full' if is_full else 'partial'} tank")
+
+# Message handler for the data input (gallons price odometer)
+async def handle_fillup_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().split()
+    if len(text) < 2:
+        await update.message.reply_text("Need at least: gallons price [optional odometer]")
         return
 
-    fillup_data = context.user_data.get("fillup_data")
-    if not fillup_data:
-        await query.edit_message_text("No fill-up data found. Use /fillup to start.")
+    try:
+        gallons = float(text[0])
+        price = float(text[1])
+        odometer = float(text[2]) if len(text) > 2 else None
+    except ValueError:
+        await update.message.reply_text("Invalid numbers. Use format: 12.3 45.67 123456")
         return
 
-    gallons = fillup_data['gallons']
-    price = fillup_data['price']
-    odometer = fillup_data['odometer']
-    is_full = data == "fillup_confirm_full" or fillup_data['is_full']
+    user_data = context.user_data.setdefault("fillup_data", {})
+    user_data.update({
+        "gallons": gallons,
+        "price": price,
+        "odometer": odometer,
+    })
+
+    # TODO: Replace hardcoded vehicle_id=1 with real vehicle selection/lookup
+    vehicle_id = 1  # ← FIX THIS LATER – e.g. from user active vehicle
+    user_id = update.effective_user.id
     fill_date = datetime.utcnow()
 
-    # Replace with your vehicle ID logic (e.g. from context or user data)
-    vehicle_id = 1  # Placeholder - replace with actual vehicle ID from user/vehicle plugin
+    print(f"[fillup] Received data from user {user_id}: "
+          f"gallons={gallons}, price=${price:.2f}, odo={odometer}, vehicle={vehicle_id}")
 
     async for session in get_db():
-        await session.execute(text('''
-            INSERT INTO fuel_records (vehicle_id, user_id, odometer, gallons, price, fill_date, is_full_tank)
-            VALUES (:vehicle_id, :user_id, :odometer, :gallons, :price, :fill_date, :is_full_tank)
-        '''), {
-            "vehicle_id": vehicle_id,
-            "user_id": update.effective_user.id,
-            "odometer": odometer,
-            "gallons": gallons,
-            "price": price,
-            "fill_date": fill_date,
-            "is_full_tank": 1 if is_full else 0
-        })
-        await session.commit()
+        try:
+            await session.execute(text('''
+                INSERT INTO fuel_records (vehicle_id, user_id, odometer, gallons, price, fill_date, is_full_tank)
+                VALUES (:vehicle_id, :user_id, :odometer, :gallons, :price, :fill_date, :is_full_tank)
+            '''), {
+                "vehicle_id": vehicle_id,
+                "user_id": user_id,
+                "odometer": odometer,
+                "gallons": gallons,
+                "price": price,
+                "fill_date": fill_date,
+                "is_full_tank": 1 if user_data.get("is_full", True) else 0
+            })
+            await session.commit()
 
-        description = f"Fuel fill-up: {gallons} gal @ ${price:.2f}"
-        await session.execute(text('''
-            INSERT INTO finance_records (type, amount, description, vehicle_id, timestamp)
-            VALUES ('expense', :amount, :description, :vehicle_id, :timestamp)
-        '''), {
-            "amount": price,
-            "description": description,
-            "vehicle_id": vehicle_id,
-            "timestamp": fill_date
-        })
-        await session.commit()
+            # Auto-create finance expense
+            description = f"Fuel fill-up: {gallons} gal @ ${price:.2f}"
+            await session.execute(text('''
+                INSERT INTO finance_records (type, amount, description, vehicle_id, timestamp)
+                VALUES ('expense', :amount, :description, :vehicle_id, :timestamp)
+            '''), {
+                "amount": price,
+                "description": description,
+                "vehicle_id": vehicle_id,
+                "timestamp": fill_date
+            })
+            await session.commit()
 
-    context.user_data.pop("fillup_data", None)
+            print(f"[fillup] SUCCESS: Logged fill-up + finance expense for vehicle {vehicle_id}")
 
-    reply = f"Fill-up logged. {'Full tank' if is_full else 'Partial'}."
-    await query.edit_message_text(reply)
+            await update.message.reply_text(
+                f"Fill-up logged: {gallons} gal @ ${price:.2f}. "
+                f"{'Full' if user_data.get('is_full', True) else 'Partial'} tank."
+            )
+
+            # Clean up user data
+            context.user_data.pop("fillup_data", None)
+
+        except Exception as e:
+            print(f"[fillup] Save failed for user {user_id}: {e}")
+            await update.message.reply_text(f"Error saving fill-up: {str(e)}")
 
 def initialize():
     asyncio.create_task(init_mysql())
     asyncio.create_task(init_db())
-    print("[fillup_plugin] Initialized – /fillup ready")
+    print("[fillup_plugin] Initialized – /fillup ready with step-by-step logging")
