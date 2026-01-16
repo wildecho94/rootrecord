@@ -1,5 +1,5 @@
 # commands/start_cmd.py
-# Updated: Full welcome with command list + RootRecord article on first /start
+# Updated: Full welcome with command list + RootRecord article on first /start + registration
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
@@ -64,8 +64,8 @@ More coming: activities, weather on pings, crypto tracking, etc.
 
 Enjoy — and feel free to send locations or logs anytime!
 """
+
         else:
-            # Return user welcome
             reply = f"Hello {first_name}! 👋 Back to RootRecord. Use /start for full command list if needed."
 
     await update.message.reply_text(reply, parse_mode="Markdown")
