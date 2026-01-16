@@ -1,6 +1,7 @@
 # RootRecord core.py
 # Version: 1.43.20260116 – Fixed async plugin init (loop starts first), lowercase utils folder
 # Backup completely removed as requested
+# New Fix for v1.42: Integrate telegram bot into main asyncio loop for clean shutdown (no Thread). Await bot_main() + handle KeyboardInterrupt for shutdown_bot().
 
 from pathlib import Path
 import sys
@@ -51,41 +52,30 @@ def clear_pycache():
                     count += 1
                 except Exception as e:
                     log_debug(f"Failed to remove {path}: {e}")
-    log_debug(f"Cleared {count} __pycache__ folder(s)")
+    log_debug(f"Cleared {count} __pycache__ folders")
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
-    DATABASE.parent.mkdir(exist_ok=True)
-
-def wait_for_db_ready():
-    log_debug("[startup] Waiting for DB to become available (handles lock from previous run)")
-    db_ready = False
-    for attempt in range(10):
-        try:
-            with sqlite3.connect(DATABASE, timeout=5) as conn:
-                conn.execute("SELECT 1")
-            db_ready = True
-            break
-        except sqlite3.OperationalError as e:
-            if "locked" in str(e).lower():
-                log_debug(f"[startup] DB locked, retrying in 1s ({attempt+1}/10)...")
-                time.sleep(1)
-            else:
-                log_debug(f"[startup] DB error (non-lock): {e}")
-                raise
-    if not db_ready:
-        log_debug("[startup] CRITICAL: Could not access database after 10 retries. Exiting.")
-        sys.exit(1)
+    (DATA_FOLDER / ".keep").touch(exist_ok=True)
 
 async def main_loop():
-    log_debug("[core] Main asyncio loop running - background tasks active")
-
-    # Run plugin auto-init AFTER the loop has started
+    # Discover + init plugins now that the loop has started
     plugins = discover_plugin_names()
     await auto_run_plugins_async(plugins)
 
-    while True:
-        await asyncio.sleep(60)
+    # Start telegram bot in main loop (integrated, no thread)
+    from Plugin_Files.telegram_plugin import bot_main, shutdown_bot
+    bot_task = asyncio.create_task(bot_main())
+
+    try:
+        while True:
+            await asyncio.sleep(60)  # Your main periodic (empty now, but keeps loop)
+    except asyncio.CancelledError:
+        print("[core] Main loop cancelled")
+    finally:
+        await shutdown_bot()  # Clean shutdown
+        bot_task.cancel()
+        await asyncio.gather(bot_task, return_exceptions=True)
 
 def discover_plugin_names():
     plugins = []
@@ -123,4 +113,4 @@ if __name__ == "__main__":
         asyncio.run(main_loop())
     except KeyboardInterrupt:
         log_debug("\nShutting down RootRecord...")
-        sys.exit(0)
+    sys.exit(0)

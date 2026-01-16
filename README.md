@@ -1,7 +1,7 @@
 # RootRecord
 **Personal tracking bot & dashboard**  
-**Current version: 1.42.20260116 MYSQL Migrated**  
-**Release date:** January 16, 2026
+**Current version: 1.42**  
+**Latest release: 20260117** (January 17, 2026)
 
 RootRecord is a modular Telegram bot + Flask web dashboard for logging real-time GPS pings (with reverse geocoding), vehicle fuel fill-ups (MPG & $/mile stats), finance transactions, system uptime, and more.
 
@@ -19,7 +19,7 @@ RootRecord is a modular Telegram bot + Flask web dashboard for logging real-time
   - **L:** (Archive) – 3.63 TB large internal desktop SATA drive (2.10 TB free, direct to motherboard SATA port)  
   - **USB dock note**: Dual-slot enclosure supporting micro SSDs or full-size SATA drives (currently handling D:; L: is internal SATA)
 
-Built in Python with MySQL (v9.5.0), python-telegram-bot v20+, SQLAlchemy async, Flask, Geopy, and Cloudflare Tunnel.
+Built in Python with MySQL (v9.5.0), python-telegram-bot, SQLAlchemy async, Flask, Geopy, and Cloudflare Tunnel.
 
 ### Features
 
@@ -39,18 +39,21 @@ Built in Python with MySQL (v9.5.0), python-telegram-bot v20+, SQLAlchemy async,
 #### Backend
 - MySQL (localhost, v9.5.0) – primary storage  
 - SQLite (`data/rootrecord.db`) – legacy fallback (backups disabled)  
-- Plugin auto-discovery from `Plugin_Files/`  
-- Auto-table creation on first use for `users`, `gps_records`, etc.
-
-### Timing Perspective (Jan 16, 2026)
-RootRecord has been running continuously for **3 days, 16+ hours** (as of this release) with **~98.1% uptime**.  
-The bot has survived multiple restarts, git history purges (to kill massive backup zips), full MySQL migration, and countless code tweaks — all while keeping LTC and DOGE nodes synced in the background.  
-It's still early — many features are stubbed or in progress — but the core loop (polling + DB + plugins) is stable.
+- Plugin auto-discovery from `Plugin_Files/`
 
 ### Setup
 1. Clone repo
 2. `pip install python-telegram-bot geopy flask sqlalchemy asyncmy mysql-connector-python`
 3. Create `config_telegram.json` with bot token
 4. Run `start_rootrecord.bat`
+
+### Timing Perspective (Jan 17, 2026)
+RootRecord has been running continuously for **3 days, 16+ hours** (as of this release) with **~98.1% uptime**.  
+The bot has survived multiple restarts, git history purges (to kill massive backup zips), full MySQL migration, and countless code tweaks — all while keeping LTC and DOGE nodes synced in the background.  
+It's still early — many features are stubbed or in progress — but the core loop (polling + DB + plugins) is stable.
+
+### Releases
+- **20260116** (January 16, 2026) — Initial public release  
+  → https://github.com/wildecho94/rootrecord/releases/tag/20260116
 
 MIT License @wildecho94

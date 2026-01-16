@@ -59,7 +59,7 @@ AsyncSessionLocal = sessionmaker(
 )
 
 async def get_db():
-    async with AsyncSessionLocal() as session:
+    async with AsyncSessionLocal(close_resets_only=False) as session:  # Added close_resets_only=False to ensure full close
         try:
             yield session
         except Exception:
