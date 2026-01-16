@@ -1,5 +1,5 @@
 # Plugin_Files/dashboard_snapshot_plugin.py
-# Version: 20260118-fix2 – Fixed missing datetime import + added import at top
+# Version: 20260118-fix4 – Fixed datetime + added full import safety + verbose error
 
 """
 Dashboard Snapshot Plugin – Automates updates to dashboard_totals table
@@ -10,7 +10,13 @@ import asyncio
 from pathlib import Path
 import mysql.connector
 from mysql.connector import Error
-from datetime import datetime  # FIXED: import datetime here
+
+# Safe datetime import with fallback message
+try:
+    from datetime import datetime
+except ImportError as ie:
+    print(f"[dashboard_snapshot] CRITICAL: Failed to import datetime: {ie}")
+    raise
 
 from utils.db_mysql import config  # Shared config loader
 
@@ -43,12 +49,15 @@ def update_snapshot():
                 0
         """)
         conn.commit()
-        print(f"[dashboard_snapshot] Totals updated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[dashboard_snapshot] SUCCESS: Totals updated at {now_str}")
 
     except Error as e:
         print(f"[dashboard_snapshot] MySQL error: {e}")
     except Exception as e:
-        print(f"[dashboard_snapshot] Unexpected error: {e}")
+        print(f"[dashboard_snapshot] Unexpected error: {type(e).__name__}: {e}")
+        import traceback
+        print(traceback.format_exc())
     finally:
         if cursor:
             cursor.close()
@@ -63,6 +72,7 @@ async def periodic_update():
         await asyncio.sleep(600)
 
 def initialize():
+    print("[dashboard_snapshot] Initializing...")
     # Ensure table exists
     conn = None
     cursor = None
