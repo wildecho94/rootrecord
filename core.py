@@ -1,9 +1,9 @@
 # RootRecord core.py
 # Version: 1.43.20260116 – Fixed async plugin init (loop starts first), lowercase utils folder
+# Backup completely removed (no sqlite or other backups)
 
 from pathlib import Path
 import sys
-import shutil
 import os
 from datetime import datetime
 import sqlite3
@@ -51,17 +51,6 @@ def clear_pycache():
                 except Exception as e:
                     log_debug(f"Failed to remove {path}: {e}")
     log_debug(f"Cleared {count} __pycache__ folder(s)")
-
-def backup_folder(source: Path, dest: Path):
-    dest.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = dest / f"backup_{timestamp}.zip"
-    log_debug(f"Starting backup → {backup_path}")
-    try:
-        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source)
-        log_debug(f"Backup complete: {backup_path}")
-    except Exception as e:
-        log_debug(f"Backup failed: {e}")
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
@@ -122,12 +111,7 @@ def initialize_system():
     ensure_data_folder()
     clear_pycache()
     
-    # Backup old SQLite if it still exists (migration safety net)
-    old_db = DATA_FOLDER / "rootrecord.db"
-    if old_db.exists():
-        backup_folder(DATA_FOLDER, DATA_FOLDER / "sqlite_backups")
-        log_debug("Old SQLite DB backed up before full MySQL migration")
-
+    # No backup for sqlite or anything else
     log_debug("RootRecord initialization complete (MySQL mode)")
 
 if __name__ == "__main__":
