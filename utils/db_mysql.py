@@ -1,4 +1,4 @@
-# Core_Files/db_mysql.py
+# utils/db_mysql.py
 # Version: 20260117 – Self-hosted local MySQL connection (secure config.json load)
 
 import json
@@ -16,7 +16,6 @@ def load_or_create_config():
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
     else:
-        # Auto-create with fake/test values (edit with real ones!)
         fake_config = {
             "mysql_user": "root",
             "mysql_password": "rootrecord123",
@@ -24,7 +23,7 @@ def load_or_create_config():
         }
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(fake_config, f, indent=2)
-        print(f"[db_mysql] Created project-local {CONFIG_PATH.name} with fake/test credentials.")
+        print(f"[db_mysql] Created {CONFIG_PATH.name} with fake/test credentials.")
         print("  → Edit it with your real MySQL password!")
         print("  → Add config_mysql.json to .gitignore to keep it private.")
         config = fake_config
@@ -46,7 +45,7 @@ DATABASE_URL = (
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=False,                  # Change to True for query logging during testing
+    echo=False,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
