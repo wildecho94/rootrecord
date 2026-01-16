@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix6 – Prevent recursive backup of old .zip files, skip large DB
+# Version: 1.44.20260118-fix7 – HARD LIMIT on backup size, never include .zip files
 
 from pathlib import Path
 import sys
@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 import asyncio
 import time
+import zipfile
 
 from utils.db_mysql import engine, init_mysql
 
@@ -54,33 +55,40 @@ def backup_folder(source: Path, dest: Path):
     backup_path = dest / f"backup_{timestamp}.zip"
     log_debug(f"Backup start → {backup_path}")
 
-    # Safety: skip if old DB is huge
-    old_db = source / "rootrecord.db"
-    if old_db.exists() and old_db.stat().st_size > 100 * 1024 * 1024:
-        log_debug(f"SKIP backup: rootrecord.db too big ({old_db.stat().st_size / (1024**2):.1f} MB)")
+    # Quick size check – abort if source looks too big
+    total_size = 0
+    for root, dirs, files in os.walk(source):
+        for f in files:
+            fp = Path(root) / f
+            if fp.suffix.lower() == '.zip':
+                log_debug(f"Skipping old backup: {fp}")
+                continue
+            total_size += fp.stat().st_size if fp.exists() else 0
+
+    if total_size > 50 * 1024 * 1024:  # 50 MB hard limit
+        log_debug(f"ABORT backup: source too large (~{total_size / (1024*1024):.1f} MB)")
+        log_debug("Delete old large files in data/ or raise limit if needed")
         return
 
     skipped = []
     try:
-        # Use zipfile for fine control: exclude any .zip in source (no recursive backups)
-        import zipfile
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for root, dirs, files in os.walk(source):
                 for file in files:
                     full_path = Path(root) / file
                     if full_path.suffix.lower() == '.zip':
-                        skipped.append(str(full_path))
-                        continue  # skip old backups
+                        skipped.append(str(full_path.name))
+                        continue
                     arcname = str(full_path.relative_to(source))
                     try:
                         zf.write(full_path, arcname)
                     except PermissionError:
-                        skipped.append(f"{full_path} (locked)")
+                        skipped.append(f"{full_path.name} (locked)")
                     except Exception as e:
-                        log_debug(f"Skip {full_path}: {e}")
-        log_debug(f"Backup complete: {backup_path}")
+                        log_debug(f"Skip {file}: {e}")
+        log_debug(f"Backup OK: {backup_path} ({backup_path.stat().st_size / (1024*1024):.1f} MB)")
         if skipped:
-            log_debug(f"Skipped {len(skipped)} files: {', '.join(skipped[:5])}{'...' if len(skipped)>5 else ''}")
+            log_debug(f"Skipped {len(skipped)} items: {', '.join(skipped[:10])}{'...' if len(skipped)>10 else ''}")
     except Exception as e:
         log_debug(f"Backup failed: {type(e).__name__}: {e}")
 
@@ -126,7 +134,7 @@ def initialize_system():
     
     old_db = DATA_FOLDER / "rootrecord.db"
     if old_db.exists():
-        log_debug("Old DB found – backup attempt")
+        log_debug("Old DB found – backup attempt (limited to <50MB)")
         backup_folder(DATA_FOLDER, DATA_FOLDER / "sqlite_backups")
     
     log_debug("Init done (MySQL)")
@@ -147,7 +155,7 @@ async def main_loop():
     counter = 0
     while True:
         counter += 1
-        if counter % 30 == 0:  # every 30 min
+        if counter % 30 == 0:
             log_debug(f"[alive] {datetime.now().strftime('%H:%M:%S')} – cycle {counter}")
         await asyncio.sleep(60)
 
