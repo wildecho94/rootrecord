@@ -1,6 +1,5 @@
 # commands/start_cmd.py
-# Final, clean version – auto-creates users table on first /start + registers user + welcome with article & command list
-# No datetime, no extra prints, no crash risk, only what you asked for
+# Final complete version: auto-creates users table if missing + registers user on first /start + welcome with article & command list
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
@@ -16,7 +15,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     last_name = user.last_name
 
     async for session in get_db():
-        # Auto-create users table if missing (one-time, safe)
+        # Auto-create users table if it doesn't exist (one-time, safe)
         await session.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id BIGINT PRIMARY KEY,
