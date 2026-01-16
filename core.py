@@ -1,5 +1,5 @@
-# core.py
-# Version: 1.43.20260116 – Fixed async plugin initialization (proper event loop handling for async initialize())
+# RootRecord core.py
+# Version: 1.43.20260116 – Moved plugin auto-run AFTER main asyncio loop starts (fixes no running event loop)
 
 from pathlib import Path
 import sys
@@ -10,7 +10,6 @@ import sqlite3
 import importlib.util
 import asyncio
 import time
-import threading
 
 BASE_DIR = Path(__file__).parent
 
@@ -84,31 +83,28 @@ def print_discovery_report(plugins):
         print(f"{p} → main")
     print("─" * 60)
 
-def auto_run_plugins(plugins):
-    # Create and set a new event loop for this thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+async def run_plugin_initialize(name, module):
+    """Async wrapper to run a plugin's initialize() safely."""
     try:
-        for name in plugins:
-            file_path = PLUGIN_FOLDER / f"{name}.py"
-            spec = importlib.util.spec_from_file_location(name, file_path)
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[name] = module
-            spec.loader.exec_module(module)
-            try:
-                if hasattr(module, "initialize"):
-                    coro = module.initialize()
-                    if asyncio.iscoroutine(coro):
-                        # Run the async initialize coroutine properly
-                        future = asyncio.ensure_future(coro, loop=loop)
-                        loop.run_until_complete(future)
-                    log_debug(f"→ {name} initialized")
-                else:
-                    log_debug(f"→ {name} loaded (no initialize() function)")
-            except Exception as e:
-                log_debug(f"Failed to auto-run {name}: {e}")
-    finally:
-        loop.close()
+        if hasattr(module, "initialize"):
+            coro = module.initialize()
+            if asyncio.iscoroutine(coro):
+                await coro
+            log_debug(f"→ {name} initialized")
+        else:
+            log_debug(f"→ {name} loaded (no initialize() function)")
+    except Exception as e:
+        log_debug(f"Failed to auto-run {name}: {e}")
+
+async def auto_run_plugins_async(plugins):
+    """Async version of plugin auto-run - called after loop starts."""
+    for name in plugins:
+        file_path = PLUGIN_FOLDER / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        await run_plugin_initialize(name, module)
 
 def initialize_system():
     log_debug("rootrecord system starting...")
@@ -119,8 +115,6 @@ def initialize_system():
 
     plugins = discover_plugin_names()
     print_discovery_report(plugins)
-
-    auto_run_plugins(plugins)
 
     # Print MySQL Workbench link for easy viewing of the DB
     print("\nTo view your MySQL database (rootrecord on localhost:3306):")
@@ -134,6 +128,7 @@ def initialize_system():
     print("Test Connection → Connect → browse tables like finance_records.\n")
 
     log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
+    return plugins
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
@@ -159,17 +154,22 @@ def wait_for_db_ready():
         log_debug("[startup] CRITICAL: Could not access database after 10 retries. Exiting.")
         sys.exit(1)
 
-async def main_loop():
+async def main_loop(plugins):
     log_debug("[core] Main asyncio loop running - background tasks active")
+
+    # Run plugin auto-init NOW that the loop is active
+    await auto_run_plugins_async(plugins)
+
     while True:
         await asyncio.sleep(60)
 
 if __name__ == "__main__":
     initialize_system()
+    plugins = discover_plugin_names()  # Re-discover after init if needed
     log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
 
     try:
-        asyncio.run(main_loop())
+        asyncio.run(main_loop(plugins))
     except KeyboardInterrupt:
         log_debug("\nShutting down RootRecord...")
         sys.exit(0)
