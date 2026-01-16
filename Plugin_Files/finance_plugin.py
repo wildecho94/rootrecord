@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Fixed UnboundLocalError in show_detailed_report (variables defined outside async loop)
+# Version: 1.43.20260117 – Fully migrated to self-hosted MySQL (async, single DB, fixed UnboundLocalError)
 
 import asyncio
 from datetime import datetime
@@ -182,10 +182,10 @@ async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYP
     recent = []
 
     async for session in get_db():
-        total_income = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'income'"))).scalar()
-        total_expense = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'expense'"))).scalar()
-        total_assets = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'asset'"))).scalar()
-        total_debt = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'debt'"))).scalar()
+        total_income = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'income'"))).scalar() or 0.0
+        total_expense = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'expense'"))).scalar() or 0.0
+        total_assets = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'asset'"))).scalar() or 0.0
+        total_debt = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'debt'"))).scalar() or 0.0
 
         balance = total_income - total_expense
         net_worth = (total_income + total_assets) - (total_expense + total_debt)

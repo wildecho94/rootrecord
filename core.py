@@ -1,5 +1,5 @@
-# RootRecord core.py
-# Version: 1.43.20260116 – Updated for lowercase 'utils' folder + NSSM/MySQL Workbench instructions
+# core.py
+# Version: 1.43.20260116 – Fixed async plugin initialization (proper event loop handling for async initialize())
 
 from pathlib import Path
 import sys
@@ -58,7 +58,6 @@ def backup_folder(source: Path, dest: Path):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = dest / f"backup_{timestamp}.zip"
     log_debug(f"Starting backup → {backup_path}")
-    # Simple zip backup (skips .db-shm, .db-wal, .zip)
     try:
         shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source)
         log_debug("Backup complete.")
@@ -86,23 +85,30 @@ def print_discovery_report(plugins):
     print("─" * 60)
 
 def auto_run_plugins(plugins):
-    loop = asyncio.get_event_loop()
-    for name in plugins:
-        file_path = PLUGIN_FOLDER / f"{name}.py"
-        spec = importlib.util.spec_from_file_location(name, file_path)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        spec.loader.exec_module(module)
-        try:
-            if hasattr(module, "initialize"):
-                coro = module.initialize()
-                if asyncio.iscoroutine(coro):
-                    asyncio.run_coroutine_threadsafe(coro, loop)
-                log_debug(f"→ {name} initialized")
-            else:
-                log_debug(f"→ {name} loaded (no initialize() function)")
-        except Exception as e:
-            log_debug(f"Failed to auto-run {name}: {e}")
+    # Create and set a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        for name in plugins:
+            file_path = PLUGIN_FOLDER / f"{name}.py"
+            spec = importlib.util.spec_from_file_location(name, file_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            spec.loader.exec_module(module)
+            try:
+                if hasattr(module, "initialize"):
+                    coro = module.initialize()
+                    if asyncio.iscoroutine(coro):
+                        # Run the async initialize coroutine properly
+                        future = asyncio.ensure_future(coro, loop=loop)
+                        loop.run_until_complete(future)
+                    log_debug(f"→ {name} initialized")
+                else:
+                    log_debug(f"→ {name} loaded (no initialize() function)")
+            except Exception as e:
+                log_debug(f"Failed to auto-run {name}: {e}")
+    finally:
+        loop.close()
 
 def initialize_system():
     log_debug("rootrecord system starting...")
@@ -116,7 +122,7 @@ def initialize_system():
 
     auto_run_plugins(plugins)
 
-    # Print MySQL Workbench download link for easy viewing of the DB
+    # Print MySQL Workbench link for easy viewing of the DB
     print("\nTo view your MySQL database (rootrecord on localhost:3306):")
     print("Download MySQL Workbench here: https://dev.mysql.com/downloads/workbench/")
     print("Install over CRD, then create connection:")
