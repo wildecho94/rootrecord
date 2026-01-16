@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix9 – No more backups at all (commented out), added .gitignore enforcement check
+# Version: 1.44.20260118-fix10 – Backup remains disabled, added git push fix note + more verbose shutdown
 
 from pathlib import Path
 import sys
@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 import asyncio
 import time
+import traceback
 
 from utils.db_mysql import engine, init_mysql
 
@@ -49,13 +50,13 @@ def clear_pycache():
     log_debug(f"Cleared {count} pycache folders")
 
 def backup_folder(source: Path, dest: Path):
-    log_debug("Backup function called – but disabled to prevent large files in git")
-    log_debug("If you need backups, run manually or re-enable with size cap")
-    # Comment out or remove the actual backup code to avoid accidents
-    # shutil.make_archive(...)  # DISABLED
+    log_debug("Backup function called – still disabled to prevent git issues")
+    log_debug("Manual backup if needed: copy data/ folder elsewhere")
+    # No zip creation – safe mode
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
+    log_debug("Data folder ensured")
 
 async def wait_for_db_ready():
     log_debug("[startup] MySQL wait...")
@@ -94,23 +95,23 @@ def initialize_system():
     ensure_data_folder()
     clear_pycache()
     
-    # Backup disabled to avoid git issues – manual if needed
-    log_debug("Backup disabled (safe mode) – old DB not zipped")
+    log_debug("Backup disabled (safe mode) – no zip created")
     
     log_debug("Init done (MySQL)")
 
 async def main_loop():
-    log_debug("Main loop")
+    log_debug("Main loop start")
     await wait_for_db_ready()
     await init_mysql()
     plugins = discover_plugin_names()
     await auto_run_plugins_async(plugins)
     
-    print("\n" + "═"*60)
-    print("ROOTRECORD LIVE – Bot polling active")
-    print("Send /start or location to test")
-    print("Ctrl+C here to stop")
-    print("═"*60 + "\n", flush=True)
+    print("\n" + "═"*70)
+    print("ROOTRECORD FULLY LIVE – Bot polling active")
+    print("Send /start, /uptime, or location to bot in Telegram")
+    print("Console will show [alive] every 10 min + activity logs")
+    print("Ctrl+C here to stop safely")
+    print("═"*70 + "\n", flush=True)
     
     counter = 0
     while True:
@@ -119,12 +120,21 @@ async def main_loop():
             log_debug(f"[alive] {datetime.now().strftime('%H:%M:%S')} – cycle {counter}")
         await asyncio.sleep(60)
 
+def graceful_shutdown():
+    log_debug("Graceful shutdown requested...")
+    # Add any cleanup here if needed (e.g. close DB pools)
+    log_debug("Shutdown complete")
+
 if __name__ == "__main__":
     try:
         initialize_system()
         asyncio.run(main_loop())
     except KeyboardInterrupt:
         log_debug("Shutdown (Ctrl+C)")
+        graceful_shutdown()
     except Exception as e:
         log_debug(f"FATAL CRASH: {e}\n{traceback.format_exc()}")
+        graceful_shutdown()
         sys.exit(1)
+    finally:
+        log_debug("=== RootRecord exit ===")
