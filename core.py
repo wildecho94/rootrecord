@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118 – Migrated to MySQL readiness check, removed SQLite
+# Version: 1.44.20260118-fix – Fixed MySQL readiness check with text()
 
 from pathlib import Path
 import sys
@@ -69,16 +69,18 @@ def ensure_data_folder():
 async def wait_for_db_ready():
     log_debug("[startup] Waiting for MySQL to become available")
     db_ready = False
-    for attempt in range(15):  # More attempts since MySQL startup can be slower
+    for attempt in range(15):
         try:
             async with engine.connect() as conn:
-                await conn.execute("SELECT 1")
+                from sqlalchemy import text
+                await conn.execute(text("SELECT 1"))
+                await conn.commit()  # Helps some drivers flush
             db_ready = True
             log_debug("[startup] MySQL connection successful")
             break
         except Exception as e:
             log_debug(f"[startup] MySQL not ready yet ({attempt+1}/15): {str(e)}")
-            await asyncio.sleep(2)  # Longer backoff
+            await asyncio.sleep(2)
     if not db_ready:
         log_debug("[startup] CRITICAL: Could not connect to MySQL after 15 retries. Exiting.")
         sys.exit(1)
