@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Migrated to self-hosted MySQL 9.5 (async, fixed UnboundLocalError, no locks)
+# Version: 1.43.20260117 – Fixed UnboundLocalError in show_detailed_report (variables defined outside async loop)
 
 import asyncio
 from datetime import datetime
@@ -8,7 +8,7 @@ from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from utils.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper (from renamed utils folder)
+from utils.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper
 
 ROOT = Path(__file__).parent.parent
 
