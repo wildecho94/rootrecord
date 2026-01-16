@@ -1,224 +1,222 @@
 # Plugin_Files/vehicles_plugin.py
-# Version: 20260115 – Removed extra expenses / finance_records query, kept fuel-only stats
+# Version: 20260118 – Full migration to async self-hosted MySQL, removed SQLite
 
-import sqlite3
+import asyncio
+from datetime import datetime
 from pathlib import Path
+from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 
+from utils.db_mysql import get_db, init_mysql
+
 ROOT = Path(__file__).parent.parent
-DB_PATH = ROOT / "data" / "rootrecord.db"
 
-def init_db():
-    print("[vehicles_plugin] Creating vehicles table...")
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
+# ────────────────────────────────────────────────
+# Database Setup
+# ────────────────────────────────────────────────
+async def init_db():
+    print("[vehicles_plugin] Creating/updating vehicles & fuel_records tables in MySQL...")
+    async for session in get_db():
+        # Vehicles table
+        await session.execute(text('''
             CREATE TABLE IF NOT EXISTS vehicles (
-                vehicle_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                plate TEXT NOT NULL,
-                year INTEGER NOT NULL,
-                make TEXT NOT NULL,
-                model TEXT NOT NULL,
-                initial_odometer INTEGER NOT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, plate) ON CONFLICT IGNORE
+                vehicle_id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                plate VARCHAR(20) NOT NULL,
+                year INT NOT NULL,
+                make VARCHAR(50) NOT NULL,
+                model VARCHAR(100) NOT NULL,
+                initial_odometer INT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_user_plate (user_id, plate)
             )
-        ''')
-        conn.commit()
-    print("[vehicles_plugin] Vehicles table ready")
+        '''))
+        # Fuel records (moved here from fillup_plugin if you want consolidation later)
+        await session.execute(text('''
+            CREATE TABLE IF NOT EXISTS fuel_records (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                vehicle_id INT NOT NULL,
+                user_id BIGINT NOT NULL,
+                odometer REAL,
+                gallons REAL NOT NULL,
+                price REAL NOT NULL,
+                fill_date DATETIME NOT NULL,
+                is_full_tank TINYINT DEFAULT 1,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_vehicle_fill_date (vehicle_id, fill_date)
+            )
+        '''))
+        await session.commit()
+    print("[vehicles_plugin] Vehicles & fuel tables ready in MySQL")
 
-def add_vehicle(user_id: int, plate: str, year: int, make: str, model: str, odometer: int):
-    plate = plate.upper()
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            INSERT OR IGNORE INTO vehicles (user_id, plate, year, make, model, initial_odometer)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, plate, year, make, model, odometer))
-        conn.commit()
-    print(f"[vehicles] Added vehicle {plate} for user {user_id}")
+# ────────────────────────────────────────────────
+# Helper: Get user's vehicles
+# ────────────────────────────────────────────────
+async def get_user_vehicles(user_id: int):
+    vehicles = []
+    async for session in get_db():
+        result = await session.execute(text('''
+            SELECT vehicle_id, plate, year, make, model, initial_odometer
+            FROM vehicles
+            WHERE user_id = :uid
+            ORDER BY created_at DESC
+        '''), {"uid": user_id})
+        vehicles = result.fetchall()
+    return vehicles
 
+# ────────────────────────────────────────────────
+# Add vehicle command
+# ────────────────────────────────────────────────
 async def cmd_vehicle_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     args = context.args
-    if len(args) < 5:
-        await update.effective_message.reply_text("Usage: /vehicle add <Plate> <Year> <Make> <Model> <Odometer>")
+
+    if len(args) < 6:
+        await update.message.reply_text(
+            "Usage: /vehicle add PLATE YEAR MAKE MODEL INITIAL_ODOMETER\n"
+            "Example: /vehicle add ABC123 2020 Toyota Corolla 45000"
+        )
         return
 
     plate = args[0].upper()
     try:
         year = int(args[1])
+        make = args[2]
+        model = " ".join(args[3:-1])  # Allow multi-word models
         odometer = int(args[-1])
     except ValueError:
-        await update.effective_message.reply_text("Year and Odometer must be numbers.")
+        await update.message.reply_text("Year and odometer must be numbers.")
         return
 
-    make = ' '.join(args[2:-1]) if len(args) > 5 else args[2]
-    model = args[-2] if len(args) > 5 else args[3]
+    try:
+        async for session in get_db():
+            await session.execute(text('''
+                INSERT INTO vehicles (user_id, plate, year, make, model, initial_odometer)
+                VALUES (:uid, :plate, :year, :make, :model, :odo)
+                ON DUPLICATE KEY UPDATE
+                    year = VALUES(year),
+                    make = VALUES(make),
+                    model = VALUES(model),
+                    initial_odometer = VALUES(initial_odometer)
+            '''), {
+                "uid": user_id,
+                "plate": plate,
+                "year": year,
+                "make": make,
+                "model": model,
+                "odo": odometer
+            })
+            await session.commit()
+        await update.message.reply_text(f"Vehicle **{plate}** ({year} {make} {model}) added/updated.")
+    except Exception as e:
+        await update.message.reply_text(f"Error adding vehicle: {str(e)}")
 
-    add_vehicle(user_id, plate, year, make, model, odometer)
-    await update.effective_message.reply_text(f"Vehicle added: {year} {make} {model} ({plate}), initial odometer {odometer}")
-
+# ────────────────────────────────────────────────
+# List vehicles command
+# ────────────────────────────────────────────────
 async def cmd_vehicles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            SELECT vehicle_id, plate, year, make, model
-            FROM vehicles
-            WHERE user_id = ?
-        ''', (user_id,))
-        vehicles = c.fetchall()
+    vehicles = await get_user_vehicles(user_id)
 
     if not vehicles:
-        await update.effective_message.reply_text("No vehicles found. Add one with /vehicle add first.")
+        await update.message.reply_text("You have no vehicles yet. Add one with /vehicle add")
         return
 
-    keyboard = []
-    for vid, plate, year, make, model in vehicles:
-        keyboard.append([
-            InlineKeyboardButton(f"{year} {make} {model} ({plate})", callback_data=f"veh_view_{vid}"),
-            InlineKeyboardButton("MPG", callback_data=f"veh_mpg_{vid}")
-        ])
+    text = "**Your Vehicles**\n\n"
+    for vid, plate, year, make, model, odo in vehicles:
+        text += f"• **{plate}** – {year} {make} {model} (Initial: {odo} mi)\n"
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.effective_message.reply_text("Your vehicles:", reply_markup=reply_markup)
+    await update.message.reply_text(text, parse_mode="Markdown")
 
-async def show_vehicle_details(update: Update, context: ContextTypes.DEFAULT_TYPE, vehicle_id: int):
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            SELECT plate, year, make, model, initial_odometer, created_at
-            FROM vehicles
-            WHERE vehicle_id = ? AND user_id = ?
-        ''', (vehicle_id, update.effective_user.id))
-        vehicle = c.fetchone()
+# ────────────────────────────────────────────────
+# MPG / Fuel Stats (consolidated here for now)
+# ────────────────────────────────────────────────
+async def calculate_fuel_stats(vehicle_id: int):
+    fills = []
+    async for session in get_db():
+        result = await session.execute(text('''
+            SELECT odometer, gallons, price, fill_date
+            FROM fuel_records
+            WHERE vehicle_id = :vid AND odometer IS NOT NULL
+            ORDER BY fill_date ASC
+        '''), {"vid": vehicle_id})
+        fills = result.fetchall()
 
-    if not vehicle:
-        await send_reply(update, "Vehicle not found or access denied.")
-        return
+    if len(fills) < 2:
+        return None
 
-    plate, year, make, model, initial_odometer, created_at = vehicle
-    text = (
-        f"**Vehicle Details**\n"
-        f"• **Plate**: {plate}\n"
-        f"• **Year / Make / Model**: {year} {make} {model}\n"
-        f"• **Initial Odometer**: {initial_odometer} mi\n"
-        f"• **Added**: {created_at.split('T')[0]}"
-    )
+    total_miles = 0
+    total_gallons = 0
+    total_fuel_cost = 0
 
-    keyboard = [[InlineKeyboardButton("Back to list", callback_data="veh_list")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    for i in range(1, len(fills)):
+        prev_odo = fills[i-1][0]
+        curr_odo, gallons, price, _ = fills[i]
+        miles = curr_odo - prev_odo
+        if miles > 0 and gallons > 0:
+            total_miles += miles
+            total_gallons += gallons
+            total_fuel_cost += price or 0
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-    else:
-        await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    if total_miles <= 0 or total_gallons <= 0:
+        return None
 
-async def callback_vehicle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    overall_mpg = total_miles / total_gallons
+    fuel_cost_per_mile = total_fuel_cost / total_miles if total_miles > 0 else 0
 
-    data = query.data
-
-    if data == "veh_list":
-        await cmd_vehicles(update, context)
-        return
-
-    if data.startswith("veh_view_"):
-        vid = int(data.split("_")[-1])
-        await show_vehicle_details(update, context, vid)
-
-    elif data.startswith("veh_mpg_"):
-        await cmd_mpg(update, context)
-
-    elif data == "veh_cancel":
-        await query.edit_message_text("Cancelled.")
+    return {
+        "mpg": overall_mpg,
+        "miles": total_miles,
+        "gallons": total_gallons,
+        "cost": total_fuel_cost,
+        "cost_per_mile": fuel_cost_per_mile,
+        "fill_count": len(fills) - 1,  # intervals, not fills
+        "period_start": fills[0][3].strftime("%Y-%m-%d"),
+        "period_end": fills[-1][3].strftime("%Y-%m-%d")
+    }
 
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    is_from_button = bool(update.callback_query)
-
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            SELECT vehicle_id, plate, year, make, model, initial_odometer
-            FROM vehicles
-            WHERE user_id = ?
-        ''', (user_id,))
-        vehicles = c.fetchall()
+    vehicles = await get_user_vehicles(user_id)
 
     if not vehicles:
-        await send_reply(update, "No vehicles found. Add one with /vehicle add first.")
+        await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
         return
 
-    text = "**Vehicle Fuel & MPG Statistics (Cumulative – all fills included)**\n"
-    if is_from_button:
-        text += "_(from vehicle list)_\n"
-    text += "───────────────\n\n"
+    text = "**Fuel Efficiency Stats**\n\n"
     has_data = False
 
-    for veh in vehicles:
-        vid, plate, year, make, model, initial_odo = veh
-
-        with sqlite3.connect(DB_PATH) as conn:
-            c = conn.cursor()
-            c.execute('''
-                SELECT odometer, gallons, price, fill_date
-                FROM fuel_records
-                WHERE vehicle_id = ? AND gallons > 0
-                ORDER BY fill_date ASC
-            ''', (vid,))
-            fills = c.fetchall()
-
-        if not fills:
-            text += f"**{year} {make} {model} ({plate})**\n  No fill-up records yet\n\n"
-            continue
-
-        valid_odos = [f[0] for f in fills if f[0] is not None and f[0] >= 1000]
-        if not valid_odos:
-            text += f"**{year} {make} {model} ({plate})**\n  No valid odometer readings\n\n"
-            continue
-
-        latest_odo = max(valid_odos)
-        total_miles = latest_odo - initial_odo
-        total_gallons = sum(f[1] for f in fills)
-        total_fuel_cost = sum(f[2] or 0 for f in fills)
-
-        if total_miles <= 0 or total_gallons <= 0:
-            text += f"**{year} {make} {model} ({plate})**\n  Invalid totals (miles: {total_miles}, gallons: {total_gallons:.2f})\n\n"
-            continue
-
-        overall_mpg = total_miles / total_gallons
-        fuel_cost_per_mile = total_fuel_cost / total_miles if total_miles > 0 else 0
-
-        text += f"**{year} {make} {model} ({plate})**\n"
-        text += f"  • Overall MPG: **{overall_mpg:.1f}**\n"
-        text += f"  • Total miles driven: **{total_miles}** mi\n"
-        text += f"  • Total fuel added: **{total_gallons:.2f}** gal\n"
-        text += f"  • Total fuel cost: **${total_fuel_cost:.2f}**\n"
-        text += f"  • Fuel cost per mile: **${fuel_cost_per_mile:.3f}**\n"
-        text += f"  • Fills counted: {len(fills)}\n"
-        text += f"  • Period: {fills[0][3].split('T')[0]} to {fills[-1][3].split('T')[0]}\n\n"
-
-        has_data = True
+    for vid, plate, year, make, model, _ in vehicles:
+        stats = await calculate_fuel_stats(vid)
+        if stats:
+            has_data = True
+            text += f"**{year} {make} {model} ({plate})**\n"
+            text += f"  • Overall MPG: **{stats['mpg']:.1f}**\n"
+            text += f"  • Total miles: **{stats['miles']}** mi\n"
+            text += f"  • Total fuel: **{stats['gallons']:.2f}** gal\n"
+            text += f"  • Total fuel cost: **${stats['cost']:.2f}**\n"
+            text += f"  • Cost per mile: **${stats['cost_per_mile']:.3f}**\n"
+            text += f"  • Intervals counted: {stats['fill_count']}\n"
+            text += f"  • Period: {stats['period_start']} to {stats['period_end']}\n\n"
+        else:
+            text += f"**{year} {make} {model} ({plate})**: Not enough fill-up data (need odometer + multiple fills)\n\n"
 
     if not has_data:
-        text += "No usable data yet. Add fill-ups with realistic odometer values."
+        text += "No usable fuel data yet. Log fill-ups with /fillup (include odometer)."
 
-    await send_reply(update, text, parse_mode="Markdown")
+    await update.message.reply_text(text, parse_mode="Markdown")
 
-async def send_reply(update: Update, text: str, reply_markup=None, parse_mode=None):
-    if update.message:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-    elif update.callback_query and update.callback_query.message:
-        await update.callback_query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-    elif update.callback_query:
-        await update.callback_query.answer(text[:200], show_alert=len(text) > 200)
-
+# ────────────────────────────────────────────────
+# Plugin initialization
+# ────────────────────────────────────────────────
 def initialize():
-    init_db()
-    print("[vehicles_plugin] Initialized – vehicle management + fuel-only stats ready")
+    asyncio.create_task(init_mysql())
+    asyncio.create_task(init_db())
+    print("[vehicles_plugin] Initialized – MySQL vehicles + fuel stats ready")
+
+# Note: Handlers should be added in your main plugin loader / telegram_plugin.py
+# Example:
+# app.add_handler(CommandHandler("vehicle", cmd_vehicle_add))  # or subcommands
+# app.add_handler(CommandHandler("vehicles", cmd_vehicles))
+# app.add_handler(CommandHandler("mpg", cmd_mpg))

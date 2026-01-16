@@ -1,86 +1,47 @@
 # Plugin_Files/mpg_plugin.py
-# Version: 20260113 – Dedicated MPG stats & calculations
+# Version: 20260118 – Migrated to MySQL; now thin wrapper using vehicles_plugin logic
 
 """
 MPG plugin – /mpg command to view per-vehicle fuel efficiency
-Calculates MPG only on full-tank fill-ups with odometer
-Running average per vehicle
+Delegates calculations to vehicles_plugin (shared MySQL tables & logic)
 """
 
-import sqlite3
-from pathlib import Path
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
 
-ROOT = Path(__file__).parent.parent
-DB_PATH = ROOT / "data" / "rootrecord.db"
-
-def calculate_mpg_for_vehicle(vehicle_id: int):
-    """
-    Calculate last MPG and average MPG for a vehicle based on full-tank fill-ups.
-    Returns (last_mpg, avg_mpg) or (None, None) if not enough data.
-    """
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            SELECT fill_id, odometer, gallons, fill_date
-            FROM fuel_records
-            WHERE vehicle_id = ? AND is_full_tank = 1 AND odometer IS NOT NULL
-            ORDER BY fill_date ASC
-        ''', (vehicle_id,))
-        full_tanks = c.fetchall()
-
-    if len(full_tanks) < 2:
-        return None, None  # Not enough full tanks to calculate MPG
-
-    mpgs = []
-    for i in range(1, len(full_tanks)):
-        prev = full_tanks[i-1]
-        curr = full_tanks[i]
-        miles = curr[1] - prev[1]          # odometer difference
-        gallons_used = curr[2]             # gallons of current fill (assumes previous partials included)
-        if gallons_used > 0:
-            mpg = miles / gallons_used
-            mpgs.append(mpg)
-
-    if not mpgs:
-        return None, None
-
-    avg_mpg = sum(mpgs) / len(mpgs)
-    last_mpg = mpgs[-1]
-    return last_mpg, avg_mpg
+# Reuse shared helpers from vehicles_plugin
+from .vehicles_plugin import get_user_vehicles, calculate_fuel_stats
 
 async def cmd_mpg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
-            SELECT v.vehicle_id, v.plate, v.year, v.make, v.model
-            FROM vehicles v
-            WHERE v.user_id = ?
-        ''', (user_id,))
-        vehicles = c.fetchall()
+    vehicles = await get_user_vehicles(user_id)
 
     if not vehicles:
         await update.message.reply_text("No vehicles found. Add one with /vehicle add first.")
         return
 
-    text = "MPG Stats:\n"
+    text = "**Fuel Efficiency Stats**\n\n"
     has_data = False
-    for v in vehicles:
-        vid, plate, year, make, model = v
-        last_mpg, avg_mpg = calculate_mpg_for_vehicle(vid)
-        if last_mpg is not None:
+
+    for vid, plate, year, make, model, _ in vehicles:
+        stats = await calculate_fuel_stats(vid)
+        if stats:
             has_data = True
-            text += f"{year} {make} {model} ({plate}): Last MPG {last_mpg:.1f}, Avg {avg_mpg:.1f}\n"
+            text += f"**{year} {make} {model} ({plate})**\n"
+            text += f"  • Overall MPG: **{stats['mpg']:.1f}**\n"
+            text += f"  • Total miles: **{stats['miles']}** mi\n"
+            text += f"  • Total fuel: **{stats['gallons']:.2f}** gal\n"
+            text += f"  • Total fuel cost: **${stats['cost']:.2f}**\n"
+            text += f"  • Cost per mile: **${stats['cost_per_mile']:.3f}**\n"
+            text += f"  • Intervals counted: {stats['fill_count']}\n"
+            text += f"  • Period: {stats['period_start']} to {stats['period_end']}\n\n"
         else:
-            text += f"{year} {make} {model} ({plate}): No full-tank data yet\n"
+            text += f"**{year} {make} {model} ({plate})**: Not enough fill-up data (need odometer + multiple fills)\n\n"
 
     if not has_data:
-        text += "\nNo MPG data yet. Log full tank fill-ups (with odometer and --full) to start tracking."
+        text += "No usable fuel data yet. Log fill-ups with /fillup (include odometer)."
 
-    await update.message.reply_text(text)
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 def initialize():
-    print("[mpg_plugin] Initialized – /mpg stats ready")
+    print("[mpg_plugin] Initialized – /mpg command ready (using MySQL via vehicles_plugin)")

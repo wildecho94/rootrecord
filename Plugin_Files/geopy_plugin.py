@@ -1,85 +1,116 @@
 # Plugin_Files/geopy_plugin.py
-# Version: 20260113 – Separate enrichment table, original timestamps preserved
+# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks, fixed syntax)
 
-"""
-Geopy plugin – reverse geocoding + distance
-All enriched data saved SEPARATELY (geopy_enriched table)
-Uses original raw timestamp from gps_records
-received_at = when enrichment ran
-No deletion/grouping of raw gps_records rows
-"""
-
-import sqlite3
+import asyncio
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy import text
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 
+from utils.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper
+
 ROOT = Path(__file__).parent.parent
-DB_PATH = ROOT / "data" / "rootrecord.db"
 USER_AGENT = "RootRecordBot/1.0 (contact: wildecho94@gmail.com)"
 
 geolocator = Nominatim(user_agent=USER_AGENT)
 
-def init_db():
-    print("[geopy_plugin] Creating geopy_enriched table if missing...")
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
+async def init_db():
+    print("[geopy_plugin] Creating/updating geopy_enriched table in MySQL...")
+    async for session in get_db():
+        await session.execute(text('''
             CREATE TABLE IF NOT EXISTS geopy_enriched (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ping_id INTEGER NOT NULL,
-                latitude REAL NOT NULL,
-                longitude REAL NOT NULL,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ping_id INT NOT NULL,
+                latitude DOUBLE NOT NULL,
+                longitude DOUBLE NOT NULL,
                 address TEXT,
                 city TEXT,
                 country TEXT,
-                distance_m REAL,
-                original_timestamp TEXT NOT NULL,
-                enriched_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(ping_id) REFERENCES gps_records(id)
+                distance_m DOUBLE,
+                original_timestamp DATETIME NOT NULL,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        '''))
+        await session.commit()
+
+        try:
+            await session.execute(text('''
+                CREATE INDEX idx_ping_id ON geopy_enriched (ping_id)
+            '''))
+            await session.commit()
+            print("[geopy_plugin] Created index idx_ping_id")
+        except Exception as e:
+            if "Duplicate key name" in str(e):
+                print("[geopy_plugin] Index idx_ping_id already exists")
+            else:
+                print(f"[geopy_plugin] Index creation failed: {e}")
+
+    print("[geopy_plugin] Geopy table and index ready in MySQL")
+
+async def get_last_ping(vehicle_id: int = None):
+    async for session in get_db():
+        query = text('''
+            SELECT latitude, longitude
+            FROM gps_records
         ''')
-        c.execute('CREATE INDEX IF NOT EXISTS idx_ping_id ON geopy_enriched (ping_id)')
-        conn.commit()
-    print("[geopy_plugin] Geopy enrichment table ready")
+        params = {}
+        if vehicle_id is not None:
+            query = text('''
+                SELECT latitude, longitude
+                FROM gps_records
+                WHERE vehicle_id = :vehicle_id
+            ''')
+            params = {"vehicle_id": vehicle_id}
+        query = query + text(" ORDER BY timestamp DESC LIMIT 1")
 
-def enrich_ping(ping_id: int, lat: float, lon: float, original_timestamp: str, prev_lat=None, prev_lon=None):
-    print(f"[geopy] Enriching ping {ping_id}: ({lat:.6f}, {lon:.6f}) @ {original_timestamp}")
+        result = await session.execute(query, params)
+        last_ping = result.fetchone()
+        return last_ping if last_ping else (None, None)
 
+async def enrich_ping(ping_id: int, lat: float, lon: float, original_timestamp: datetime, vehicle_id: int = None):
     try:
-        location = geolocator.reverse((lat, lon), exactly_one=True, timeout=10)
-        if location:
-            raw = location.raw
-            address = raw.get('display_name', 'No address')
-            city = raw['address'].get('city') or raw['address'].get('town') or 'Unknown'
-            country = raw['address'].get('country', 'Unknown')
-        else:
-            address = city = country = 'No address found'
-    except Exception as e:
-        print(f"[geopy] Geocoding error: {e}")
-        address = city = country = 'Geopy failed'
+        address = city = country = 'No address found'
+        try:
+            location = await asyncio.get_running_loop().run_in_executor(None, geolocator.reverse, f"{lat}, {lon}", None, "en")
+            if location:
+                address = location.address
+                raw = location.raw.get('address', {})
+                city = raw.get('city', raw.get('town', raw.get('village', 'Unknown')))
+                country = raw.get('country', 'Unknown')
+        except Exception as e:
+            print(f"[geopy] Geocoding error: {e}")
 
-    distance_m = None
-    if prev_lat is not None and prev_lon is not None:
-        distance_m = geodesic((prev_lat, prev_lon), (lat, lon)).meters
-        print(f"[geopy] Distance from previous: {distance_m:.0f} m")
+        distance_m = None
+        prev_lat, prev_lon = await get_last_ping(vehicle_id)
+        if prev_lat is not None and prev_lon is not None:
+            distance_m = geodesic((prev_lat, prev_lon), (lat, lon)).meters
+            print(f"[geopy] Distance from previous: {distance_m:.0f} m")
 
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            c = conn.cursor()
-            c.execute('''
+        async for session in get_db():
+            await session.execute(text('''
                 INSERT INTO geopy_enriched (
                     ping_id, latitude, longitude,
                     address, city, country,
                     distance_m, original_timestamp
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (ping_id, lat, lon, address, city, country, distance_m, original_timestamp))
-            conn.commit()
+                ) VALUES (:ping_id, :latitude, :longitude, :address, :city, :country, :distance_m, :original_timestamp)
+            '''), {
+                "ping_id": ping_id,
+                "latitude": lat,
+                "longitude": lon,
+                "address": address,
+                "city": city,
+                "country": country,
+                "distance_m": distance_m,
+                "original_timestamp": original_timestamp
+            })
+            await session.commit()
         print(f"[geopy] SUCCESS: Enriched data saved for ping {ping_id}")
-    except sqlite3.Error as e:
-        print(f"[geopy] Save failed: {e}")
+
+    except Exception as e:
+        print(f"[geopy] Enrichment failed: {e}")
 
 def initialize():
-    init_db()
+    asyncio.create_task(init_mysql())
+    asyncio.create_task(init_db())
     print("[geopy_plugin] Initialized – waiting for pings to enrich")
