@@ -20,3 +20,10 @@ config_*.json
 
 # Logs - exclude from git
 debug_rootrecord.log
+
+MySQL/
+mysql/
+*.db-shm
+*.db-wal
+*.lock
+*.pid
