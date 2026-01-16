@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix4 – Backup now succeeds (no exclude=), added skipped files log, improved permission handling
+# Version: 1.44.20260118-fix5 – Skip large/old SQLite backups to prevent Git LFS rejection
 
 from pathlib import Path
 import sys
@@ -9,17 +9,12 @@ from datetime import datetime
 import asyncio
 import time
 
-from utils.db_mysql import engine, init_mysql  # Shared async MySQL engine
+from utils.db_mysql import engine, init_mysql
 
 BASE_DIR = Path(__file__).parent
 
 UTILS_FOLDER   = BASE_DIR / "utils"
 PLUGIN_FOLDER  = BASE_DIR / "Plugin_Files"
-
-FOLDERS = {
-    "utils":   UTILS_FOLDER,
-    "plugin":  PLUGIN_FOLDER
-}
 
 LOGS_FOLDER = BASE_DIR / "logs"
 DEBUG_LOG   = LOGS_FOLDER / "debug_rootrecord.log"
@@ -33,11 +28,13 @@ def log_debug(message: str):
     ensure_logs_folder()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
     line = f"[{timestamp}] {message}"
-    print(line)
+    print(line, flush=True)
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
         f.write(line + "\n")
+        f.flush()
 
 def clear_pycache():
+    log_debug("Starting pycache clear...")
     count = 0
     for root, dirs, _ in os.walk(BASE_DIR):
         for d in dirs:
@@ -56,31 +53,28 @@ def backup_folder(source: Path, dest: Path):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = dest / f"backup_{timestamp}.zip"
     log_debug(f"Starting backup → {backup_path}")
-    
-    skipped = []
+
+    # Skip backup if source contains large SQLite DB (prevents Git push failure)
+    old_db = source / "rootrecord.db"
+    if old_db.exists() and old_db.stat().st_size > 100 * 1024 * 1024:  # >100 MB
+        log_debug(f"SKIPPING backup: old SQLite DB too large ({old_db.stat().st_size / (1024*1024):.2f} MB) – would break Git push")
+        log_debug("Migration complete: delete data/rootrecord.db manually when ready")
+        return
+
     try:
-        # Use shutil.make_archive without exclude= (backs up everything)
-        # If permission denied on some subdirs/files, it will log but continue
-        shutil.make_archive(
-            str(backup_path.with_suffix('')),
-            'zip',
-            root_dir=str(source),
-            base_dir=None
-        )
+        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', str(source))
         log_debug(f"Backup complete: {backup_path}")
-        if skipped:
-            log_debug(f"Skipped during backup (permission issues): {', '.join(skipped)}")
     except PermissionError as pe:
-        log_debug(f"Backup partial failure - permission denied: {pe}")
-        # Continue anyway - partial backup is better than none
+        log_debug(f"Backup skipped - permission issue: {pe}")
     except Exception as e:
-        log_debug(f"Backup failed completely: {type(e).__name__}: {e}")
+        log_debug(f"Backup failed: {type(e).__name__}: {e}")
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
+    log_debug("Data folder ensured")
 
 async def wait_for_db_ready():
-    log_debug("[startup] Waiting for MySQL to become available")
+    log_debug("[startup] Waiting for MySQL...")
     db_ready = False
     for attempt in range(15):
         try:
@@ -89,70 +83,7 @@ async def wait_for_db_ready():
                 await conn.execute(text("SELECT 1"))
                 await conn.commit()
             db_ready = True
-            log_debug("[startup] MySQL connection successful")
+            log_debug("[startup] MySQL OK")
             break
         except Exception as e:
-            log_debug(f"[startup] MySQL not ready yet ({attempt+1}/15): {str(e)}")
-            await asyncio.sleep(2)
-    if not db_ready:
-        log_debug("[startup] CRITICAL: Could not connect to MySQL after 15 retries. Exiting.")
-        sys.exit(1)
-
-def discover_plugin_names():
-    plugins = []
-    for path in PLUGIN_FOLDER.glob("*.py"):
-        if path.name.startswith("_") or path.name == "__init__.py":
-            continue
-        plugins.append(path.stem)
-    return plugins
-
-async def auto_run_plugins_async(plugins):
-    for plugin_name in plugins:
-        try:
-            module = __import__(f"Plugin_Files.{plugin_name}", fromlist=["initialize"])
-            if hasattr(module, "initialize"):
-                module.initialize()
-                log_debug(f"[plugins] Auto-initialized {plugin_name}")
-            else:
-                log_debug(f"[plugins] {plugin_name} has no initialize()")
-        except Exception as e:
-            log_debug(f"[plugins] Failed to init {plugin_name}: {e}")
-
-def initialize_system():
-    ensure_logs_folder()
-    ensure_data_folder()
-    clear_pycache()
-    
-    # Backup old SQLite if it still exists (migration safety net)
-    old_db = DATA_FOLDER / "rootrecord.db"
-    if old_db.exists():
-        backup_folder(DATA_FOLDER, DATA_FOLDER / "sqlite_backups")
-        log_debug("Old SQLite DB backed up before full MySQL migration")
-
-    log_debug("RootRecord initialization complete (MySQL mode)")
-
-async def main_loop():
-    log_debug("[core] Main asyncio loop running - background tasks active")
-
-    # Wait for MySQL
-    await wait_for_db_ready()
-
-    # Warm up MySQL connection pool
-    await init_mysql()
-
-    # Run plugin auto-init AFTER DB is confirmed ready
-    plugins = discover_plugin_names()
-    await auto_run_plugins_async(plugins)
-
-    while True:
-        await asyncio.sleep(60)
-
-if __name__ == "__main__":
-    initialize_system()
-    log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
-
-    try:
-        asyncio.run(main_loop())
-    except KeyboardInterrupt:
-        log_debug("\nShutting down RootRecord...")
-        sys.exit(0)
+            log_debug(f"MySQL attempt {attempt+1
