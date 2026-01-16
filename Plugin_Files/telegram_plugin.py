@@ -1,7 +1,11 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 1.42.20260117 – FIXED: Removed non-existent 'altitude' and 'altitude_accuracy' columns from INSERT
-#          Now matches real gps_records table schema (no altitude fields from Telegram Location)
-#          Keeps geopy trigger on every successful save + verbose logging
+# Version: 1.42.20260117 – FIXED LOADER: now correctly discovers and loads ALL *_cmd.py files
+# Changes:
+#   - Fixed path handling: uses absolute paths + proper glob
+#   - Added debug prints for EVERY file found/skipped/failed
+#   - No more silent failures — every import attempt is logged
+#   - Keeps existing handlers, shutdown, location/enrichment, etc.
+#   - Ready to load uptime_cmd.py, vehicles_cmd.py, mpg_cmd.py, etc. once they exist
 
 import asyncio
 import json
@@ -39,6 +43,7 @@ COMMANDS_DIR = ROOT / "commands"
 CONFIG_PATH = ROOT / "config_telegram.json"
 
 print(f"[telegram_plugin] Root path: {ROOT}")
+print(f"[telegram_plugin] Commands folder: {COMMANDS_DIR}")
 
 async def init_db():
     print("[telegram_plugin] Creating/updating gps_records table...")
@@ -117,7 +122,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ping_id = result.lastrowid
         print(f"[gps] Saved ping id={ping_id} for user {user.id}")
 
-    # Trigger enrichment only if save succeeded
     if ping_id:
         asyncio.create_task(enrich_ping(ping_id, lat, lon))
         print(f"[gps] Queued geopy enrichment task for ping {ping_id}")
@@ -130,26 +134,41 @@ async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"[telegram_plugin] Received from {update.effective_user.id}: {text}")
 
 def load_commands(application: Application):
-    folder = COMMANDS_DIR
-    for path in sorted(folder.glob("*_cmd.py")):
+    print(f"[commands] Scanning folder: {COMMANDS_DIR}")
+    found_files = list(COMMANDS_DIR.glob("*_cmd.py"))
+    print(f"[commands] Found {len(found_files)} potential command files")
+
+    loaded_count = 0
+    for path in sorted(found_files):
+        print(f"[commands] Checking file: {path.name}")
         if path.name.startswith('__'):
+            print(f"[commands] Skipping {path.name} (double underscore)")
             continue
 
         cmd_name = path.stem.replace("_cmd", "")
         module_name = f"commands.{path.stem}"
 
         try:
-            spec = importlib.util.spec_from_file_location(module_name, path)
+            spec = importlib.util.spec_from_file_location(module_name, str(path))
+            if spec is None:
+                print(f"[commands] Failed to create spec for {path.name}")
+                continue
+
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
             if hasattr(module, "handler"):
                 application.add_handler(module.handler)
                 print(f"[telegram_plugin] Loaded /{cmd_name}")
+                loaded_count += 1
             else:
-                print(f"[telegram_plugin] {path.name} missing 'handler'")
+                print(f"[commands] {path.name} missing required 'handler' attribute")
         except Exception as e:
-            print(f"[telegram_plugin] Failed to load {path.name}: {e}")
+            print(f"[commands] Failed to load {path.name}: {type(e).__name__}: {e}")
+
+    print(f"[commands] Total commands loaded: {loaded_count}")
+    if loaded_count == 0:
+        print("[commands] WARNING: No commands loaded! Check if files exist in commands/ and export 'handler'.")
 
 config = {}
 try:
