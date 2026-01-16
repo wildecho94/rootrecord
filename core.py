@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.43.20260116 – Moved plugin auto-run AFTER main asyncio loop starts (fixes no running event loop)
+# Version: 1.43.20260116 – Fixed async plugin init (loop starts first), lowercase utils folder
 
 from pathlib import Path
 import sys
@@ -84,7 +84,6 @@ def print_discovery_report(plugins):
     print("─" * 60)
 
 async def run_plugin_initialize(name, module):
-    """Async wrapper to run a plugin's initialize() safely."""
     try:
         if hasattr(module, "initialize"):
             coro = module.initialize()
@@ -97,7 +96,6 @@ async def run_plugin_initialize(name, module):
         log_debug(f"Failed to auto-run {name}: {e}")
 
 async def auto_run_plugins_async(plugins):
-    """Async version of plugin auto-run - called after loop starts."""
     for name in plugins:
         file_path = PLUGIN_FOLDER / f"{name}.py"
         spec = importlib.util.spec_from_file_location(name, file_path)
@@ -116,7 +114,7 @@ def initialize_system():
     plugins = discover_plugin_names()
     print_discovery_report(plugins)
 
-    # Print MySQL Workbench link for easy viewing of the DB
+    # Print MySQL Workbench link
     print("\nTo view your MySQL database (rootrecord on localhost:3306):")
     print("Download MySQL Workbench here: https://dev.mysql.com/downloads/workbench/")
     print("Install over CRD, then create connection:")
@@ -154,10 +152,11 @@ def wait_for_db_ready():
         log_debug("[startup] CRITICAL: Could not access database after 10 retries. Exiting.")
         sys.exit(1)
 
-async def main_loop(plugins):
+async def main_loop():
     log_debug("[core] Main asyncio loop running - background tasks active")
 
-    # Run plugin auto-init NOW that the loop is active
+    # Run plugin auto-init AFTER the loop has started
+    plugins = discover_plugin_names()
     await auto_run_plugins_async(plugins)
 
     while True:
@@ -165,11 +164,10 @@ async def main_loop(plugins):
 
 if __name__ == "__main__":
     initialize_system()
-    plugins = discover_plugin_names()  # Re-discover after init if needed
     log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
 
     try:
-        asyncio.run(main_loop(plugins))
+        asyncio.run(main_loop())
     except KeyboardInterrupt:
         log_debug("\nShutting down RootRecord...")
         sys.exit(0)
