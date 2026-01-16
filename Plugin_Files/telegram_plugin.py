@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260118 – Full migration to async self-hosted MySQL, removed SQLite
+# Version: 20260118-fix – Fixed init_db() to use text() for multi-line CREATE statements
 
 import asyncio
 import json
@@ -20,6 +20,7 @@ from telegram.ext import (
 )
 
 from utils.db_mysql import get_db, init_mysql
+from sqlalchemy import text  # Explicit import for text()
 
 # ────────────────────────────────────────────────
 # Logging - very verbose for debugging
@@ -49,7 +50,7 @@ print(f"[telegram_plugin] Root path: {ROOT}")
 async def init_db():
     print("[telegram_plugin] Creating/updating gps_records table in MySQL...")
     async for session in get_db():
-        await session.execute('''
+        await session.execute(text('''
             CREATE TABLE IF NOT EXISTS gps_records (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -70,7 +71,7 @@ async def init_db():
                 INDEX idx_user_timestamp (user_id, timestamp),
                 INDEX idx_chat_timestamp (chat_id, timestamp)
             )
-        ''')
+        '''))
         await session.commit()
     print("[telegram_plugin] GPS records table ready in MySQL")
 
@@ -130,7 +131,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         async for session in get_db():
-            await session.execute('''
+            await session.execute(text('''
                 INSERT INTO gps_records (
                     user_id, username, first_name, last_name, chat_id, message_id,
                     latitude, longitude, accuracy, altitude, heading, speed,
@@ -140,7 +141,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     :latitude, :longitude, :accuracy, :altitude, :heading, :speed,
                     :live_period, :timestamp
                 )
-            ''', data)
+            '''), data)
             await session.commit()
         logger.info(f"[gps] Saved ping for user {user.id} @ {loc.latitude},{loc.longitude}")
     except Exception as e:
