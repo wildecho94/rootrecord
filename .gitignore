@@ -29,3 +29,5 @@ mysql/
 *.pid
 # zips
 *.zip
+
+*.exe

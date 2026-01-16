@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix7 – HARD LIMIT on backup size, never include .zip files
+# Version: 1.44.20260118-fix8 – Backup hard-capped <50MB, skips .zip, no recursion
 
 from pathlib import Path
 import sys
@@ -53,42 +53,45 @@ def backup_folder(source: Path, dest: Path):
     dest.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = dest / f"backup_{timestamp}.zip"
-    log_debug(f"Backup start → {backup_path}")
+    log_debug(f"Backup attempt → {backup_path}")
 
-    # Quick size check – abort if source looks too big
+    # Estimate total size first (exclude .zip files)
     total_size = 0
-    for root, dirs, files in os.walk(source):
-        for f in files:
-            fp = Path(root) / f
+    skipped = []
+    for root_dir, _, files in os.walk(source):
+        for file in files:
+            fp = Path(root_dir) / file
             if fp.suffix.lower() == '.zip':
-                log_debug(f"Skipping old backup: {fp}")
+                skipped.append(fp.name)
                 continue
-            total_size += fp.stat().st_size if fp.exists() else 0
+            try:
+                total_size += fp.stat().st_size
+            except:
+                pass
 
     if total_size > 50 * 1024 * 1024:  # 50 MB hard limit
-        log_debug(f"ABORT backup: source too large (~{total_size / (1024*1024):.1f} MB)")
-        log_debug("Delete old large files in data/ or raise limit if needed")
+        log_debug(f"ABORT: Backup would be ~{total_size / (1024*1024):.1f} MB – too large")
+        log_debug("Skipping to avoid Git push issues. Delete large files in data/ if needed.")
         return
 
-    skipped = []
+    log_debug(f"Backing up ~{total_size / (1024*1024):.1f} MB (skipped {len(skipped)} .zip files)")
+    
     try:
         with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for root, dirs, files in os.walk(source):
+            for root_dir, _, files in os.walk(source):
                 for file in files:
-                    full_path = Path(root) / file
+                    full_path = Path(root_dir) / file
                     if full_path.suffix.lower() == '.zip':
-                        skipped.append(str(full_path.name))
                         continue
                     arcname = str(full_path.relative_to(source))
                     try:
                         zf.write(full_path, arcname)
                     except PermissionError:
-                        skipped.append(f"{full_path.name} (locked)")
+                        log_debug(f"Locked file skipped: {file}")
                     except Exception as e:
-                        log_debug(f"Skip {file}: {e}")
-        log_debug(f"Backup OK: {backup_path} ({backup_path.stat().st_size / (1024*1024):.1f} MB)")
-        if skipped:
-            log_debug(f"Skipped {len(skipped)} items: {', '.join(skipped[:10])}{'...' if len(skipped)>10 else ''}")
+                        log_debug(f"Error adding {file}: {e}")
+        actual_size = backup_path.stat().st_size / (1024*1024)
+        log_debug(f"Backup OK: {backup_path} ({actual_size:.1f} MB)")
     except Exception as e:
         log_debug(f"Backup failed: {type(e).__name__}: {e}")
 
@@ -134,7 +137,7 @@ def initialize_system():
     
     old_db = DATA_FOLDER / "rootrecord.db"
     if old_db.exists():
-        log_debug("Old DB found – backup attempt (limited to <50MB)")
+        log_debug("Old DB found – safe backup attempt (<50MB)")
         backup_folder(DATA_FOLDER, DATA_FOLDER / "sqlite_backups")
     
     log_debug("Init done (MySQL)")
