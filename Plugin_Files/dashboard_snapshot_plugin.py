@@ -1,5 +1,5 @@
 # Plugin_Files/dashboard_snapshot_plugin.py
-# Version: 20260118-fix6 – Removed datetime usage from print (uses str(time.time()) instead)
+# Version: 20260118-fix7 – Removed datetime import completely (no timestamp print), no error on update
 
 """
 Dashboard Snapshot Plugin – Automates updates to dashboard_totals table
@@ -10,7 +10,6 @@ import asyncio
 from pathlib import Path
 import mysql.connector
 from mysql.connector import Error
-import time  # Use time.time() instead of datetime
 
 from utils.db_mysql import config
 
@@ -43,12 +42,12 @@ def update_snapshot():
                 0
         """)
         conn.commit()
-        print(f"[dashboard_snapshot] Totals updated at {time.time()}")
+        print("[dashboard_snapshot] Totals updated")
 
     except Error as e:
         print(f"[dashboard_snapshot] MySQL error: {e}")
     except Exception as e:
-        print(f"[dashboard_snapshot] Unexpected error: {e}")
+        print(f"[dashboard_snapshot] Update failed: {e}")
     finally:
         if cursor:
             cursor.close()
