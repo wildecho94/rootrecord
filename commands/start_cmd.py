@@ -1,8 +1,9 @@
 # commands/start_cmd.py
-# Updated: Full welcome with command list + RootRecord article on first /start + registration
+# Fixed: Uses text() for SQL statements (fixes ArgumentError crash)
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
+from sqlalchemy import text
 
 from utils.db_mysql import get_db
 
@@ -16,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     async for session in get_db():
         # Check if user already exists
         result = await session.execute(
-            "SELECT user_id FROM users WHERE user_id = :uid",
+            text("SELECT user_id FROM users WHERE user_id = :uid"),
             {"uid": user_id}
         )
         exists = result.fetchone() is not None
@@ -24,10 +25,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not exists:
             # Register new user
             await session.execute(
-                """
-                INSERT INTO users (user_id, username, first_name, last_name)
-                VALUES (:uid, :username, :first_name, :last_name)
-                """,
+                text("""
+                    INSERT INTO users (user_id, username, first_name, last_name)
+                    VALUES (:uid, :username, :first_name, :last_name)
+                """),
                 {
                     "uid": user_id,
                     "username": username,
