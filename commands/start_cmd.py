@@ -1,6 +1,6 @@
 # commands/start_cmd.py
-# Final version: auto-creates users table if missing + registers user on first /start + welcome with article & commands list
-# No datetime, no extra prints, no crash risk
+# Final, clean version – auto-creates users table on first /start + registers user + welcome with article & command list
+# No datetime, no extra prints, no crash risk, only what you asked for
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
