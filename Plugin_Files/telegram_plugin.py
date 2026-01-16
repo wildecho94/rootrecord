@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Fixed: added missing import datetime, removed invalid location attributes, no extra init_mysql call
+# Fixed: added missing datetime import, removed invalid location attributes, no extra init_mysql call
 
 import asyncio
 import json
@@ -7,7 +7,7 @@ import importlib.util
 import logging
 from pathlib import Path
 from threading import Thread
-from datetime import datetime  # Added to fix NameError in timestamp
+from datetime import datetime  # FIXED: added for timestamp in location save
 
 from telegram import Update
 from telegram.ext import (
