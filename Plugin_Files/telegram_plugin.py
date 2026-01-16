@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Updated: fixed location handler to use correct attributes (no 'altitude' or 'heading' on Location)
+# Fixed: removed init_mysql() call (not defined here), fixed location handler attributes, no extra noise
 
 import asyncio
 import json
@@ -7,7 +7,6 @@ import importlib.util
 import logging
 from pathlib import Path
 from threading import Thread
-from datetime import datetime
 
 from telegram import Update
 from telegram.ext import (
@@ -15,14 +14,11 @@ from telegram.ext import (
     ContextTypes,
     MessageHandler,
     filters,
-    CommandHandler,
-    CallbackQueryHandler,
 )
 
 from utils.db_mysql import get_db
 from sqlalchemy import text
 
-# Logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -33,16 +29,14 @@ logging.getLogger("telegram").setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 print("[telegram_plugin] Logging initialized - VERBOSE mode ON")
 
-# Paths & Config
 ROOT = Path(__file__).parent.parent
 COMMANDS_DIR = ROOT / "commands"
 CONFIG_PATH = ROOT / "config_telegram.json"
 
 print(f"[telegram_plugin] Root path: {ROOT}")
 
-# Database Setup
 async def init_db():
-    print("[telegram_plugin] Creating/updating gps_records table in MySQL...")
+    print("[telegram_plugin] Creating/updating gps_records table...")
     async for session in get_db():
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS gps_records (
@@ -56,10 +50,6 @@ async def init_db():
                 latitude DOUBLE NOT NULL,
                 longitude DOUBLE NOT NULL,
                 accuracy DOUBLE,
-                altitude DOUBLE,
-                heading DOUBLE,
-                speed DOUBLE,
-                live_period INT,
                 timestamp DATETIME NOT NULL,
                 received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_user_timestamp (user_id, timestamp),
@@ -67,9 +57,8 @@ async def init_db():
             )
         '''))
         await session.commit()
-    print("[telegram_plugin] GPS records table ready in MySQL")
+    print("[telegram_plugin] GPS records table ready")
 
-# Dynamic command loader
 def load_commands(application: Application):
     folder = COMMANDS_DIR.resolve()
     for path in sorted(folder.glob("*_cmd.py")):
@@ -92,7 +81,6 @@ def load_commands(application: Application):
         except Exception as e:
             print(f"[commands] Failed to load {path.name}: {e}")
 
-# Location handler – fixed attributes
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_message or not update.effective_message.location:
         return
@@ -112,10 +100,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "latitude": loc.latitude,
         "longitude": loc.longitude,
         "accuracy": loc.horizontal_accuracy,
-        "altitude": None,  # Location object does NOT have altitude
-        "heading": None,   # No heading
-        "speed": None,     # No speed
-        "live_period": None,
         "timestamp": datetime.utcnow()
     }
 
@@ -124,12 +108,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await session.execute(text('''
                 INSERT INTO gps_records (
                     user_id, username, first_name, last_name, chat_id, message_id,
-                    latitude, longitude, accuracy, altitude, heading, speed,
-                    live_period, timestamp
+                    latitude, longitude, accuracy, timestamp
                 ) VALUES (
                     :user_id, :username, :first_name, :last_name, :chat_id, :message_id,
-                    :latitude, :longitude, :accuracy, :altitude, :heading, :speed,
-                    :live_period, :timestamp
+                    :latitude, :longitude, :accuracy, :timestamp
                 )
             '''), data)
             await session.commit()
@@ -137,12 +119,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"[gps] Failed to save location: {e}")
 
-# Message logger
 async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         logger.debug(f"Message from {update.effective_user.id}: {update.message.text or '[non-text]'}")
 
-# Bot main
 TOKEN = None
 application = None
 
@@ -153,14 +133,14 @@ try:
     if TOKEN:
         print("[telegram_plugin] Token loaded successfully")
     else:
-        print("[telegram_plugin] WARNING: bot_token missing in config_telegram.json")
+        print("[telegram_plugin] WARNING: bot_token missing")
 except Exception as e:
     print(f"[telegram_plugin] Config load failed: {e}")
 
 async def bot_main():
     global application
     if not TOKEN:
-        print("[telegram_plugin] No valid token → exiting")
+        print("[telegram_plugin] No token – exiting")
         return
 
     print("[telegram_plugin] Starting bot...")
@@ -172,18 +152,17 @@ async def bot_main():
     print("[telegram_plugin] Adding handlers...")
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_location))
-    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, log_all))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_all))
 
-    print("[telegram_plugin] Initializing application...")
+    print("[telegram_plugin] Initializing...")
     await application.initialize()
 
-    print("[telegram_plugin] Starting bot...")
+    print("[telegram_plugin] Starting...")
     await application.start()
 
-    print("[telegram_plugin] Starting polling...")
+    print("[telegram_plugin] Polling...")
     await application.updater.start_polling(
         drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES,
         poll_interval=0.5,
         timeout=10
     )
@@ -194,31 +173,26 @@ async def bot_main():
 async def shutdown_bot():
     global application
     if application:
-        print("[telegram_plugin] Shutting down bot gracefully...")
         await application.updater.stop()
         await application.stop()
         await application.shutdown()
-        print("[telegram_plugin] Bot stopped")
 
 def run_bot():
     try:
         asyncio.run(bot_main())
     except KeyboardInterrupt:
-        print("[telegram_plugin] KeyboardInterrupt received")
+        print("[telegram_plugin] KeyboardInterrupt")
     except Exception as e:
         print(f"[telegram_plugin] Bot crashed: {e}")
     finally:
         asyncio.run(shutdown_bot())
 
-# Plugin entry
 def initialize():
     print("[telegram_plugin] initialize() called")
-    asyncio.create_task(init_mysql())
     asyncio.create_task(init_db())
 
     if TOKEN:
-        print("[telegram_plugin] Launching bot in background thread...")
-        bot_thread = Thread(target=run_bot, daemon=True)
-        bot_thread.start()
+        print("[telegram_plugin] Launching bot thread...")
+        Thread(target=run_bot, daemon=True).start()
     else:
         print("[telegram_plugin] No token – bot disabled")
