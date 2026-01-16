@@ -1,5 +1,5 @@
 # Plugin_Files/telegram_plugin.py
-# Version: 20260118-fix – Fixed init_db() to use text() for multi-line CREATE statements
+# Updated: fixed location handler to use correct attributes (no 'altitude' or 'heading' on Location)
 
 import asyncio
 import json
@@ -19,12 +19,10 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-from utils.db_mysql import get_db, init_mysql
-from sqlalchemy import text  # Explicit import for text()
+from utils.db_mysql import get_db
+from sqlalchemy import text
 
-# ────────────────────────────────────────────────
-# Logging - very verbose for debugging
-# ────────────────────────────────────────────────
+# Logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -35,18 +33,14 @@ logging.getLogger("telegram").setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 print("[telegram_plugin] Logging initialized - VERBOSE mode ON")
 
-# ────────────────────────────────────────────────
 # Paths & Config
-# ────────────────────────────────────────────────
 ROOT = Path(__file__).parent.parent
 COMMANDS_DIR = ROOT / "commands"
 CONFIG_PATH = ROOT / "config_telegram.json"
 
 print(f"[telegram_plugin] Root path: {ROOT}")
 
-# ────────────────────────────────────────────────
-# Database - MySQL, immediate save on EVERY ping
-# ────────────────────────────────────────────────
+# Database Setup
 async def init_db():
     print("[telegram_plugin] Creating/updating gps_records table in MySQL...")
     async for session in get_db():
@@ -75,9 +69,7 @@ async def init_db():
         await session.commit()
     print("[telegram_plugin] GPS records table ready in MySQL")
 
-# ────────────────────────────────────────────────
-# Dynamic command loader (unchanged)
-# ────────────────────────────────────────────────
+# Dynamic command loader
 def load_commands(application: Application):
     folder = COMMANDS_DIR.resolve()
     for path in sorted(folder.glob("*_cmd.py")):
@@ -100,9 +92,7 @@ def load_commands(application: Application):
         except Exception as e:
             print(f"[commands] Failed to load {path.name}: {e}")
 
-# ────────────────────────────────────────────────
-# Location handler - save to MySQL
-# ────────────────────────────────────────────────
+# Location handler – fixed attributes
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_message or not update.effective_message.location:
         return
@@ -122,10 +112,10 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "latitude": loc.latitude,
         "longitude": loc.longitude,
         "accuracy": loc.horizontal_accuracy,
-        "altitude": loc.altitude,
-        "heading": loc.heading,
-        "speed": loc.speed if hasattr(loc, 'speed') else None,
-        "live_period": loc.live_period if hasattr(loc, 'live_period') else None,
+        "altitude": None,  # Location object does NOT have altitude
+        "heading": None,   # No heading
+        "speed": None,     # No speed
+        "live_period": None,
         "timestamp": datetime.utcnow()
     }
 
@@ -143,21 +133,19 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             '''), data)
             await session.commit()
-        logger.info(f"[gps] Saved ping for user {user.id} @ {loc.latitude},{loc.longitude}")
+        logger.info(f"[gps] Saved ping for user {user.id}")
     except Exception as e:
         logger.error(f"[gps] Failed to save location: {e}")
 
-# ────────────────────────────────────────────────
-# Global message logger (optional, for debug)
-# ────────────────────────────────────────────────
+# Message logger
 async def log_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message:
         logger.debug(f"Message from {update.effective_user.id}: {update.message.text or '[non-text]'}")
 
-# ────────────────────────────────────────────────
-# Bot main loop
-# ────────────────────────────────────────────────
+# Bot main
 TOKEN = None
+application = None
+
 try:
     with CONFIG_PATH.open(encoding="utf-8") as f:
         config = json.load(f)
@@ -170,6 +158,7 @@ except Exception as e:
     print(f"[telegram_plugin] Config load failed: {e}")
 
 async def bot_main():
+    global application
     if not TOKEN:
         print("[telegram_plugin] No valid token → exiting")
         return
@@ -180,22 +169,16 @@ async def bot_main():
     print("[telegram_plugin] Loading commands...")
     load_commands(application)
 
-    print("[telegram_plugin] Registering new plugins...")  # Assuming other plugins register their own handlers
-
-    print("[telegram_plugin] Adding location handler (new + edited messages)...")
+    print("[telegram_plugin] Adding handlers...")
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     application.add_handler(MessageHandler(filters.UpdateType.EDITED_MESSAGE & filters.LOCATION, handle_location))
-
-    print("[telegram_plugin] Adding global message logger...")
     application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, log_all))
 
     print("[telegram_plugin] Initializing application...")
     await application.initialize()
-    print("[telegram_plugin] Application initialized")
 
     print("[telegram_plugin] Starting bot...")
     await application.start()
-    print("[telegram_plugin] Bot started")
 
     print("[telegram_plugin] Starting polling...")
     await application.updater.start_polling(
@@ -204,13 +187,30 @@ async def bot_main():
         poll_interval=0.5,
         timeout=10
     )
-    print("[telegram_plugin] Polling active – full activity should now be visible")
+    print("[telegram_plugin] Polling active")
 
     await asyncio.Event().wait()
 
-# ────────────────────────────────────────────────
-# Plugin entry point
-# ────────────────────────────────────────────────
+async def shutdown_bot():
+    global application
+    if application:
+        print("[telegram_plugin] Shutting down bot gracefully...")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+        print("[telegram_plugin] Bot stopped")
+
+def run_bot():
+    try:
+        asyncio.run(bot_main())
+    except KeyboardInterrupt:
+        print("[telegram_plugin] KeyboardInterrupt received")
+    except Exception as e:
+        print(f"[telegram_plugin] Bot crashed: {e}")
+    finally:
+        asyncio.run(shutdown_bot())
+
+# Plugin entry
 def initialize():
     print("[telegram_plugin] initialize() called")
     asyncio.create_task(init_mysql())
@@ -218,6 +218,7 @@ def initialize():
 
     if TOKEN:
         print("[telegram_plugin] Launching bot in background thread...")
-        Thread(target=asyncio.run, args=(bot_main(),), daemon=True).start()
+        bot_thread = Thread(target=run_bot, daemon=True)
+        bot_thread.start()
     else:
         print("[telegram_plugin] No token – bot disabled")
