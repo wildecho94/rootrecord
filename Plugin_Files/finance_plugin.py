@@ -1,5 +1,5 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks, fixed syntax)
+# Version: 1.43.20260117 – Fixed different loop error + graceful index creation
 
 import asyncio
 from datetime import datetime
@@ -8,14 +8,13 @@ from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from utils.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper
+from utils.db_mysql import get_db, init_mysql
 
 ROOT = Path(__file__).parent.parent
 
 async def init_db():
     print("[finance_plugin] Creating/updating finance_records table in MySQL...")
     async for session in get_db():
-        # Create table
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS finance_records (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -30,7 +29,6 @@ async def init_db():
         '''))
         await session.commit()
 
-        # Create index (MySQL does not support IF NOT EXISTS for CREATE INDEX, so use try/except)
         try:
             await session.execute(text('''
                 CREATE INDEX idx_type_timestamp ON finance_records (type, timestamp)
@@ -42,7 +40,6 @@ async def init_db():
                 print("[finance_plugin] Index idx_type_timestamp already exists")
             else:
                 print(f"[finance_plugin] Index creation failed: {e}")
-            # No rollback needed for index error
 
     print("[finance_plugin] Finance table and index ready in MySQL")
 
