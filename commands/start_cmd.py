@@ -1,5 +1,6 @@
 # commands/start_cmd.py
-# Final fixed version: auto-creates users table if missing + registers user on first /start + welcome with article & commands list
+# Final version: auto-creates users table if missing + registers user on first /start + welcome with article & commands list
+# No datetime, no extra prints, no crash risk
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
@@ -15,7 +16,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     last_name = user.last_name
 
     async for session in get_db():
-        # Auto-create users table if it doesn't exist (one-time)
+        # Auto-create users table if missing (one-time, safe)
         await session.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id BIGINT PRIMARY KEY,
@@ -27,7 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """))
         await session.commit()
 
-        # Register user (INSERT IGNORE = safe, skips if already exists)
+        # Register user (INSERT IGNORE = safe, no duplicate crash)
         await session.execute(
             text("""
                 INSERT IGNORE INTO users (user_id, username, first_name, last_name)
@@ -42,11 +43,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         await session.commit()
 
-    # Always send welcome (first-time gets full version, but simplified logic)
+    # Send welcome (always full version for simplicity)
     reply = f"""
 Hello {first_name}! 👋 Welcome to **RootRecord**!
 
-You've been registered (or already were).
+You've been registered.
 
 ### What is RootRecord?
 RootRecord is your personal tracking bot and dashboard.  
