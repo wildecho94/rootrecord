@@ -1,5 +1,5 @@
-# core.py
-# Version: 1.43.20260116 – Fixed async plugin init (run_coroutine_threadsafe + proper loop handling)
+# RootRecord core.py
+# Version: 1.43.20260116 – Added MySQL Workbench link for DB viewing
 
 from pathlib import Path
 import sys
@@ -98,7 +98,6 @@ def auto_run_plugins(plugins):
             if hasattr(module, "initialize"):
                 coro = module.initialize()
                 if asyncio.iscoroutine(coro):
-                    # Run async init safely in the loop
                     future = asyncio.run_coroutine_threadsafe(coro, loop)
                     future.result(timeout=10)  # Wait max 10s
                 log_debug(f"→ {name} initialized")
@@ -118,6 +117,18 @@ def initialize_system():
     print_discovery_report(plugins)
 
     auto_run_plugins(plugins)
+
+    # Print MySQL Workbench download link for easy viewing of the DB
+    print("\nTo view your MySQL database (rootrecord on localhost:3306):")
+    print("Download MySQL Workbench here: https://dev.mysql.com/downloads/workbench/")
+    print("Install it over CRD, then create a new connection:")
+    print("  - Connection Name: Local RootRecord")
+    print("  - Hostname: 127.0.0.1 (or localhost)")
+    print("  - Port: 3306")
+    print("  - Username: root")
+    print("  - Password: rootrecord123 (or whatever you set)")
+    print("  - Default Schema: rootrecord")
+    print("Test Connection → Connect → browse tables like finance_records.\n")
 
     log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
