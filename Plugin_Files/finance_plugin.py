@@ -1,48 +1,50 @@
 # Plugin_Files/finance_plugin.py
-# Version: 1.43.20260117 – Back to pure SQLite (stable, no external DB deps)
+# Version: 1.43.20260117 – Migrated to self-hosted MySQL (async, single DB, no locks)
 
-import sqlite3
+import asyncio
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy import text
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
+from core.db_mysql import get_db, init_mysql  # Shared self-hosted MySQL helper
+
 ROOT = Path(__file__).parent.parent
-DB_PATH = ROOT / "data" / "rootrecord.db"
 
-def init_db():
-    print("[finance_plugin] Creating/updating finance_records table...")
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
+async def init_db():
+    print("[finance_plugin] Creating/updating finance_records table in MySQL...")
+    async for session in get_db():
+        await session.execute(text('''
             CREATE TABLE IF NOT EXISTS finance_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                type TEXT NOT NULL,
-                amount REAL NOT NULL,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                type VARCHAR(50) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
                 description TEXT,
-                category TEXT DEFAULT 'Uncategorized',
-                timestamp TEXT NOT NULL,
-                received_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                vehicle_id INTEGER
+                category VARCHAR(100) DEFAULT 'Uncategorized',
+                timestamp DATETIME NOT NULL,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                vehicle_id INT
             )
-        ''')
-        try:
-            c.execute("ALTER TABLE finance_records ADD COLUMN vehicle_id INTEGER")
-            print("[finance_plugin] Added vehicle_id column")
-        except sqlite3.OperationalError:
-            pass
-        c.execute('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)')
-        conn.commit()
-    print("[finance_plugin] Finance table ready")
+        '''))
+        await session.execute(text('CREATE INDEX IF NOT EXISTS idx_type_timestamp ON finance_records (type, timestamp)'))
+        await session.commit()
+    print("[finance_plugin] Finance table ready in MySQL")
 
-def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
+async def log_entry(type_: str, amount: float, desc: str, cat: str = None, vehicle_id: int = None):
+    async for session in get_db():
+        await session.execute(text('''
             INSERT INTO finance_records (type, amount, description, category, timestamp, vehicle_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (type_, amount, desc, cat, datetime.utcnow().isoformat(), vehicle_id))
-        conn.commit()
+            VALUES (:type, :amount, :description, :category, :timestamp, :vehicle_id)
+        '''), {
+            "type": type_,
+            "amount": amount,
+            "description": desc,
+            "category": cat,
+            "timestamp": datetime.utcnow(),
+            "vehicle_id": vehicle_id
+        })
+        await session.commit()
     print(f"[finance] Logged {type_}: ${amount:.2f} - {desc}")
 
 async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -68,7 +70,7 @@ async def finance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cat = args[3] if len(args) > 3 else None
 
         if sub in ('expense', 'income', 'debt', 'asset'):
-            log_entry(sub, amount, desc, cat)
+            await log_entry(sub, amount, desc, cat)
             await update.effective_message.reply_text(f"{sub.capitalize()} of **${amount:.2f}** logged: {desc}", parse_mode="Markdown")
         else:
             await update.effective_message.reply_text("Unknown operation. Use the menu with /finance.")
@@ -163,7 +165,7 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
     desc = args[1]
     cat = args[2] if len(args) > 2 else None
 
-    log_entry(entry_type, amount, desc, cat)
+    await log_entry(entry_type, amount, desc, cat)
     await update.message.reply_text(
         f"✅ **{entry_type.capitalize()}** of **${amount:.2f}** logged: {desc}",
         parse_mode="Markdown"
@@ -172,82 +174,26 @@ async def handle_finance_input(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data.pop(pending_key, None)
 
 async def show_detailed_report(update: Update, context: ContextTypes.DEFAULT_TYPE, is_balance: bool):
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'income'")
-        total_income = c.fetchone()[0] or 0.0
-
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'expense'")
-        total_expense = c.fetchone()[0] or 0.0
-
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'asset'")
-        total_assets = c.fetchone()[0] or 0.0
-
-        c.execute("SELECT SUM(amount) FROM finance_records WHERE type = 'debt'")
-        total_debt = c.fetchone()[0] or 0.0
+    async for session in get_db():
+        total_income = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'income'"))).scalar()
+        total_expense = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'expense'"))).scalar()
+        total_assets = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'asset'"))).scalar()
+        total_debt = (await session.execute(text("SELECT COALESCE(SUM(amount), 0) FROM finance_records WHERE type = 'debt'"))).scalar()
 
         balance = total_income - total_expense
         net_worth = (total_income + total_assets) - (total_expense + total_debt)
 
-        c.execute('''
+        top_exp = await session.execute(text('''
             SELECT category, SUM(amount) as total
             FROM finance_records
             WHERE type = 'expense' AND category IS NOT NULL
             GROUP BY category
             ORDER BY total DESC
             LIMIT 5
-        ''')
-        top_exp = c.fetchall()
+        '''))
+        top_exp = top_exp.fetchall()
 
-        c.execute('''
+        recent = await session.execute(text('''
             SELECT type, amount, description, category, timestamp
             FROM finance_records
             ORDER BY id DESC
-            LIMIT 5
-        ''')
-        recent = c.fetchall()
-
-    title = "Balance Report" if is_balance else "Net Worth Report"
-    main_val = balance if is_balance else net_worth
-    main_lbl = "Current Balance" if is_balance else "Current Net Worth"
-
-    text = f"**{title}**\n\n"
-    text += f"**{main_lbl}**: **${main_val:,.2f}**\n\n"
-
-    text += "**Overview**\n"
-    text += f"• Total Income: **${total_income:,.2f}**\n"
-    text += f"• Total Expenses: **${total_expense:,.2f}**\n"
-    text += f"• Total Assets: **${total_assets:,.2f}**\n"
-    text += f"• Total Debts: **${total_debt:,.2f}**\n\n"
-
-    if top_exp:
-        text += "**Top Expense Categories**\n"
-        for cat, amt in top_exp:
-            text += f"• {cat or 'Uncategorized'}: **${amt:,.2f}**\n"
-        text += "\n"
-    else:
-        text += "**No categorized expenses yet.**\n\n"
-
-    if recent:
-        text += "**Recent Activity (last 5)**\n"
-        for typ, amt, desc, cat, ts in recent:
-            cat_str = f" ({cat})" if cat and cat != 'Uncategorized' else ""
-            text += f"• {typ.capitalize()} ${amt:,.2f}{cat_str} – {desc[:50]}{'...' if len(desc)>50 else ''} ({ts.split('T')[0]})\n"
-    else:
-        text += "**No transactions logged yet.**\n"
-
-    keyboard = [
-        [InlineKeyboardButton("Back to Menu", callback_data="fin_menu")],
-        [InlineKeyboardButton("Close", callback_data="fin_cancel")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-    else:
-        await update.effective_message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-
-def initialize():
-    init_db()
-    print("[finance_plugin] Initialized – SQLite + button menu ready")
