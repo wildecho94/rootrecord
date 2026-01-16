@@ -1,5 +1,5 @@
 # core.py
-# Version: 1.42.20260115 – Updated for 'utils' folder rename (lowercase)
+# Version: 1.43.20260116 – Fixed plugin auto-run: use asyncio.run_coroutine_threadsafe for async initialize()
 
 from pathlib import Path
 import sys
@@ -10,6 +10,7 @@ import sqlite3
 import importlib.util
 import asyncio
 import time
+import threading
 
 BASE_DIR = Path(__file__).parent
 
@@ -85,8 +86,75 @@ def print_discovery_report(plugins):
     print("─" * 60)
 
 def auto_run_plugins(plugins):
+    loop = asyncio.get_event_loop()
     for name in plugins:
         file_path = PLUGIN_FOLDER / f"{name}.py"
         spec = importlib.util.spec_from_file_location(name, file_path)
         module = importlib.util.module_from_spec(spec)
-       
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        try:
+            if hasattr(module, "initialize"):
+                # Run async initialize in the main loop safely from sync context
+                coro = module.initialize()
+                if asyncio.iscoroutine(coro):
+                    future = asyncio.run_coroutine_threadsafe(coro, loop)
+                    future.result(timeout=5)  # Wait for completion or timeout
+                log_debug(f"→ {name} initialized")
+            else:
+                log_debug(f"→ {name} loaded (no initialize() function)")
+        except Exception as e:
+            log_debug(f"Failed to auto-run {name}: {e}")
+
+def initialize_system():
+    log_debug("rootrecord system starting...")
+    clear_pycache()
+    backup_system()
+    ensure_data_folder()
+    wait_for_db_ready()
+
+    plugins = discover_plugin_names()
+    print_discovery_report(plugins)
+
+    auto_run_plugins(plugins)
+
+    log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
+
+def ensure_data_folder():
+    DATA_FOLDER.mkdir(exist_ok=True)
+    DATABASE.parent.mkdir(exist_ok=True)
+
+def wait_for_db_ready():
+    log_debug("[startup] Waiting for DB to become available (handles lock from previous run)")
+    db_ready = False
+    for attempt in range(10):
+        try:
+            with sqlite3.connect(DATABASE, timeout=5) as conn:
+                conn.execute("SELECT 1")
+            db_ready = True
+            break
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e).lower():
+                log_debug(f"[startup] DB locked, retrying in 1s ({attempt+1}/10)...")
+                time.sleep(1)
+            else:
+                log_debug(f"[startup] DB error (non-lock): {e}")
+                raise
+    if not db_ready:
+        log_debug("[startup] CRITICAL: Could not access database after 10 retries. Exiting.")
+        sys.exit(1)
+
+async def main_loop():
+    log_debug("[core] Main asyncio loop running - background tasks active")
+    while True:
+        await asyncio.sleep(60)
+
+if __name__ == "__main__":
+    initialize_system()
+    log_debug("RootRecord is running. Press Ctrl+C to stop.\n")
+
+    try:
+        asyncio.run(main_loop())
+    except KeyboardInterrupt:
+        log_debug("\nShutting down RootRecord...")
+        sys.exit(0)
