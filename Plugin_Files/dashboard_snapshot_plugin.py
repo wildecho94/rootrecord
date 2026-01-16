@@ -1,5 +1,5 @@
 # Plugin_Files/dashboard_snapshot_plugin.py
-# Version: 20260118-fix7 – Removed datetime import completely (no timestamp print), no error on update
+# Version: 20260118 – Working version with minimal prints, no datetime crash, auto-timestamp via MySQL
 
 """
 Dashboard Snapshot Plugin – Automates updates to dashboard_totals table
@@ -47,7 +47,7 @@ def update_snapshot():
     except Error as e:
         print(f"[dashboard_snapshot] MySQL error: {e}")
     except Exception as e:
-        print(f"[dashboard_snapshot] Update failed: {e}")
+        print(f"[dashboard_snapshot] Failed: {e}")
     finally:
         if cursor:
             cursor.close()
@@ -96,4 +96,4 @@ def initialize():
             conn.close()
 
     asyncio.create_task(periodic_update())
-    print("[dashboard_snapshot] Initialized – 10-min snapshot updates active")
+    print("[dashboard_snapshot] Initialized – running 10-min updates")
