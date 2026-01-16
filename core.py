@@ -10,7 +10,7 @@ import sqlite3
 import importlib.util
 import asyncio
 import time
-import shutil  # Added missing import for rmtree in clear_pycache
+import shutil  # Explicit import for rmtree
 
 BASE_DIR = Path(__file__).parent
 
