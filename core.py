@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix10 – Backup remains disabled, added git push fix note + more verbose shutdown
+# Version: 1.44.20260118-fix12 – Backup disabled, git remote forced to HTTPS in startup
 
 from pathlib import Path
 import sys
@@ -9,6 +9,7 @@ from datetime import datetime
 import asyncio
 import time
 import traceback
+import subprocess
 
 from utils.db_mysql import engine, init_mysql
 
@@ -50,13 +51,25 @@ def clear_pycache():
     log_debug(f"Cleared {count} pycache folders")
 
 def backup_folder(source: Path, dest: Path):
-    log_debug("Backup function called – still disabled to prevent git issues")
+    log_debug("Backup function called – still disabled to prevent any git issues")
     log_debug("Manual backup if needed: copy data/ folder elsewhere")
-    # No zip creation – safe mode
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
     log_debug("Data folder ensured")
+
+def fix_git_remote():
+    log_debug("Checking/fixing git remote URL to HTTPS (fixes publickey error)")
+    try:
+        result = subprocess.run("git remote -v", shell=True, capture_output=True, text=True)
+        if "git@github.com" in result.stdout:
+            log_debug("SSH remote detected – switching to HTTPS")
+            subprocess.run("git remote set-url origin https://github.com/wildecho94/rootrecord.git", shell=True, check=True)
+            log_debug("Git remote set to HTTPS – publish should work now")
+        else:
+            log_debug("Remote already HTTPS or correct")
+    except Exception as e:
+        log_debug(f"Failed to fix git remote: {e}")
 
 async def wait_for_db_ready():
     log_debug("[startup] MySQL wait...")
@@ -97,6 +110,8 @@ def initialize_system():
     
     log_debug("Backup disabled (safe mode) – no zip created")
     
+    fix_git_remote()  # Force HTTPS remote for publish
+    
     log_debug("Init done (MySQL)")
 
 async def main_loop():
@@ -109,21 +124,20 @@ async def main_loop():
     print("\n" + "═"*70)
     print("ROOTRECORD FULLY LIVE – Bot polling active")
     print("Send /start, /uptime, or location to bot in Telegram")
-    print("Console will show [alive] every 10 min + activity logs")
+    print("Console shows [alive] every 10 min + activity")
     print("Ctrl+C here to stop safely")
     print("═"*70 + "\n", flush=True)
     
     counter = 0
     while True:
         counter += 1
-        if counter % 10 == 0:  # every 10 min
+        if counter % 10 == 0:
             log_debug(f"[alive] {datetime.now().strftime('%H:%M:%S')} – cycle {counter}")
         await asyncio.sleep(60)
 
 def graceful_shutdown():
     log_debug("Graceful shutdown requested...")
-    # Add any cleanup here if needed (e.g. close DB pools)
-    log_debug("Shutdown complete")
+    log_debug("All systems down - safe exit")
 
 if __name__ == "__main__":
     try:
