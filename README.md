@@ -1,6 +1,6 @@
 # RootRecord
 **Personal tracking bot & dashboard**  
-**Current version: 1.42.20260116 MYSQL Migratred**  
+**Current version: 1.42.20260116 MYSQL Migrated**  
 **Release date:** January 16, 2026
 
 RootRecord is a modular Telegram bot + Flask web dashboard for logging real-time GPS pings (with reverse geocoding), vehicle fuel fill-ups (MPG & $/mile stats), finance transactions, system uptime, and more.
