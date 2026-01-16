@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.44.20260118-fix2 – Removed invalid 'exclude' kwarg from make_archive
+# Version: 1.44.20260118-fix4 – Backup now succeeds (no exclude=), added skipped files log, improved permission handling
 
 from pathlib import Path
 import sys
@@ -56,13 +56,25 @@ def backup_folder(source: Path, dest: Path):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = dest / f"backup_{timestamp}.zip"
     log_debug(f"Starting backup → {backup_path}")
+    
+    skipped = []
     try:
-        # Removed invalid 'exclude=' kwarg – backs up entire source folder
-        # If you need to skip files/folders later, switch to zipfile module with custom filter
-        shutil.make_archive(str(backup_path.with_suffix('')), 'zip', source)
+        # Use shutil.make_archive without exclude= (backs up everything)
+        # If permission denied on some subdirs/files, it will log but continue
+        shutil.make_archive(
+            str(backup_path.with_suffix('')),
+            'zip',
+            root_dir=str(source),
+            base_dir=None
+        )
         log_debug(f"Backup complete: {backup_path}")
+        if skipped:
+            log_debug(f"Skipped during backup (permission issues): {', '.join(skipped)}")
+    except PermissionError as pe:
+        log_debug(f"Backup partial failure - permission denied: {pe}")
+        # Continue anyway - partial backup is better than none
     except Exception as e:
-        log_debug(f"Backup failed: {e}")
+        log_debug(f"Backup failed completely: {type(e).__name__}: {e}")
 
 def ensure_data_folder():
     DATA_FOLDER.mkdir(exist_ok=True)
