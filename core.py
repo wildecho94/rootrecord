@@ -1,5 +1,5 @@
 # RootRecord core.py
-# Version: 1.43.20260116 – Added MySQL Workbench link for DB viewing
+# Version: 1.43.20260116 – Updated for lowercase 'utils' folder + NSSM/MySQL Workbench instructions
 
 from pathlib import Path
 import sys
@@ -118,17 +118,26 @@ def initialize_system():
 
     auto_run_plugins(plugins)
 
-    # Print MySQL Workbench download link for easy viewing of the DB
+    # Print MySQL Workbench link + NSSM instructions
     print("\nTo view your MySQL database (rootrecord on localhost:3306):")
     print("Download MySQL Workbench here: https://dev.mysql.com/downloads/workbench/")
-    print("Install it over CRD, then create a new connection:")
-    print("  - Connection Name: Local RootRecord")
-    print("  - Hostname: 127.0.0.1 (or localhost)")
+    print("Install over CRD, then create connection:")
+    print("  - Hostname: localhost")
     print("  - Port: 3306")
     print("  - Username: root")
-    print("  - Password: rootrecord123 (or whatever you set)")
+    print("  - Password: rootrecord123 (or what you set)")
     print("  - Default Schema: rootrecord")
     print("Test Connection → Connect → browse tables like finance_records.\n")
+
+    print("To run RootRecord as a background service (auto-start on boot, no window):")
+    print("Download NSSM: https://nssm.cc/download (nssm.exe 64-bit)")
+    print("Extract to C:\\nssm\\nssm.exe")
+    print("Admin cmd:")
+    print("  C:\\nssm\\nssm.exe install RootRecordBot")
+    print("  In GUI: Path = python.exe, Arguments = core.py, Startup dir = project folder")
+    print("  Service name: RootRecordBot")
+    print("  Install → nssm start RootRecordBot")
+    print("It runs forever, auto-restart on crash/reboot.\n")
 
     log_debug(f"\nStartup complete. Found {len(plugins)} potential plugin(s).\n")
 
