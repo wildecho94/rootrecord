@@ -1,9 +1,11 @@
 # Plugin_Files/uptime_plugin.py
-# Version: 1.42.20260117 – Migrated to MySQL (async, unified DB)
-#         Removed SQLite – now uses shared db_mysql.py helper
-#         Tables: uptime_records, uptime_stats
-#         Periodic: every 60s print + save snapshot
-#         /uptime command: real stats reply
+# Version: 1.42.20260117 – FULL MySQL migration (no SQLite left)
+#         Uses shared async get_db() for all queries
+#         Tables: uptime_records (events), uptime_stats (snapshots)
+#         Periodic: every 60s calculate + print + save snapshot
+#         /uptime command: real async query + formatted reply
+#         Shutdown: async record 'stop' event
+#         Handles unpaired starts, crashes, no events
 
 import asyncio
 from datetime import datetime, timedelta
@@ -13,28 +15,31 @@ from utils.db_mysql import get_db, init_mysql
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 
+YELLOW = "\033[93m"
+RESET  = "\033[0m"
+
 async def init_db():
-    print("[uptime_plugin] Creating/updating uptime tables in MySQL...")
+    print("[uptime_plugin] Creating/updating MySQL tables...")
     async for session in get_db():
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS uptime_records (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                event_type VARCHAR(10) NOT NULL,  -- start, stop, crash
-                timestamp DATETIME NOT NULL
-            )
+                event_type ENUM('start', 'stop', 'crash') NOT NULL,
+                timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         '''))
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS uptime_stats (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                uptime_pct DECIMAL(5,3) NOT NULL,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                uptime_pct DECIMAL(6,3) NOT NULL,
                 total_up VARCHAR(50) NOT NULL,
                 total_down VARCHAR(50) NOT NULL,
-                status VARCHAR(10) NOT NULL
-            )
+                status ENUM('running', 'stopped') NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         '''))
         await session.commit()
-    print("[uptime_plugin] Uptime tables ready in MySQL")
+    print("[uptime_plugin] Uptime tables ready (MySQL)")
 
 async def calculate_uptime_stats():
     async for session in get_db():
@@ -76,7 +81,7 @@ async def calculate_uptime_stats():
         elif event_type in ("stop", "crash"):
             is_running = False
 
-    # If still running, add time to now
+    # If still running, add time from last start to now
     if is_running and last_ts:
         now = datetime.utcnow()
         delta = now - last_ts
@@ -97,7 +102,7 @@ async def calculate_uptime_stats():
         return " ".join(parts)
 
     status = "running" if is_running else "stopped"
-    last_event_time = f"{last_event_type} at {last_ts}" if last_ts else "N/A"
+    last_event_time = f"{last_event_type} at {last_ts.strftime('%Y-%m-%d %H:%M:%S UTC')}" if last_ts else "N/A"
 
     stats = {
         "uptime_pct": uptime_pct,
@@ -106,7 +111,11 @@ async def calculate_uptime_stats():
         "status": status,
         "last_event_time": last_event_time
     }
-    print(f"[UPTIME] {datetime.utcnow()} UTC | Up: {stats['total_up']} | Down: {stats['total_down']} | {stats['uptime_pct']:.3f}% | Status: {stats['status']}")
+
+    print(f"{YELLOW}[UPTIME] {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} | "
+          f"Up: {stats['total_up']} | Down: {stats['total_down']} | "
+          f"{stats['uptime_pct']:.3f}% | Status: {stats['status']}{RESET}")
+
     return stats
 
 async def save_stats_snapshot(stats):
@@ -132,12 +141,13 @@ async def periodic_update():
 async def cmd_uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = await calculate_uptime_stats()
     text = (
-        f"**Lifetime Uptime Stats**\n"
-        f"• Status: **{stats['status'].upper()}**\n"
+        f"**RootRecord Lifetime Uptime**\n\n"
+        f"• Status: **{stats['status'].upper()}** {'🟢' if stats['status'] == 'running' else '🔴'}\n"
         f"• Uptime percentage: **{stats['uptime_pct']:.3f}%**\n"
-        f"• Total uptime: **{stats['total_up']}**\n"
-        f"• Total downtime: **{stats['total_down']}**\n"
-        f"• Last event: {stats['last_event_time'] or 'N/A'}"
+        f"• Total online: **{stats['total_up']}**\n"
+        f"• Total offline: **{stats['total_down']}**\n"
+        f"• Last event: {stats['last_event_time']}\n\n"
+        f"Tracks every start/stop/crash — survives restarts."
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -146,33 +156,33 @@ def initialize():
     asyncio.create_task(init_db())
     asyncio.create_task(periodic_update())
 
-    # Register /uptime command
-    from telegram.ext import Application
-    def register(app: Application):
-        app.add_handler(CommandHandler("uptime", cmd_uptime))
-        print("[uptime_plugin] /uptime command registered")
+    # Record initial 'start' event
+    asyncio.create_task(record_start_event())
 
-    # Record initial start on every launch
+    print("[uptime_plugin] Initialized – MySQL mode, periodic updates every 60s")
+
+async def record_start_event():
     async for session in get_db():
         await session.execute(text('''
             INSERT INTO uptime_records (event_type, timestamp)
             VALUES ('start', NOW())
         '''))
         await session.commit()
-    print("[uptime_plugin] Initial start recorded in MySQL")
+    print("[uptime_plugin] Recorded initial 'start' event")
 
-    print("[uptime_plugin] Initialized – MySQL mode, periodic updates every 60s")
-
-# Graceful shutdown hook (record stop)
+# Graceful shutdown: record 'stop'
 import atexit
 
-async def on_shutdown():
+async def record_shutdown():
     async for session in get_db():
         await session.execute(text('''
             INSERT INTO uptime_records (event_type, timestamp)
             VALUES ('stop', NOW())
         '''))
         await session.commit()
-    print("[uptime_plugin] Shutdown recorded in MySQL")
+    print("[uptime_plugin] Recorded 'stop' event on shutdown")
 
-atexit.register(lambda: asyncio.run(on_shutdown()))
+def sync_shutdown():
+    asyncio.run(record_shutdown())
+
+atexit.register(sync_shutdown)
