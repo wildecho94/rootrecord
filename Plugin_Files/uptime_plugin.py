@@ -1,197 +1,178 @@
 # Plugin_Files/uptime_plugin.py
-# Version: 20260113 – Merged + fixed lifetime calculation, single-file
+# Version: 1.42.20260117 – Migrated to MySQL (async, unified DB)
+#         Removed SQLite – now uses shared db_mysql.py helper
+#         Tables: uptime_records, uptime_stats
+#         Periodic: every 60s print + save snapshot
+#         /uptime command: real stats reply
 
-"""
-Uptime plugin – single-file, reliable lifetime tracking
-
-Tracks start/stop/crash events, calculates true uptime percentage across all runs.
-Prints stats every 60s in yellow + saves snapshot to uptime_stats table.
-Adds /uptime command.
-Handles crashes/restarts properly (unpaired start = still running).
-"""
-
-import threading
-import time
-import sqlite3
-import atexit
+import asyncio
 from datetime import datetime, timedelta
-from pathlib import Path
+from sqlalchemy import text
 
+from utils.db_mysql import get_db, init_mysql
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
 
-# ────────────────────────────────────────────────
-# Colors & Paths
-# ────────────────────────────────────────────────
-YELLOW = "\033[93m"
-RESET  = "\033[0m"
-
-ROOT = Path(__file__).parent.parent
-DB_PATH = ROOT / "data" / "rootrecord.db"
-
-# ────────────────────────────────────────────────
-# Database Setup
-# ────────────────────────────────────────────────
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute('''
+async def init_db():
+    print("[uptime_plugin] Creating/updating uptime tables in MySQL...")
+    async for session in get_db():
+        await session.execute(text('''
             CREATE TABLE IF NOT EXISTS uptime_records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type TEXT NOT NULL,           -- start, stop, crash
-                timestamp TEXT NOT NULL
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                event_type VARCHAR(10) NOT NULL,  -- start, stop, crash
+                timestamp DATETIME NOT NULL
             )
-        ''')
-        c.execute('''
+        '''))
+        await session.execute(text('''
             CREATE TABLE IF NOT EXISTS uptime_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                total_uptime_sec INTEGER,
-                total_downtime_sec INTEGER,
-                uptime_percentage REAL
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                uptime_pct DECIMAL(5,3) NOT NULL,
+                total_up VARCHAR(50) NOT NULL,
+                total_down VARCHAR(50) NOT NULL,
+                status VARCHAR(10) NOT NULL
             )
-        ''')
-        conn.commit()
-    print("[uptime_plugin] Database tables ready")
+        '''))
+        await session.commit()
+    print("[uptime_plugin] Uptime tables ready in MySQL")
 
-# ────────────────────────────────────────────────
-# Core Logic – calculate true lifetime uptime
-# ────────────────────────────────────────────────
-def get_all_events():
-    with sqlite3.connect(DB_PATH) as conn:
-        rows = conn.execute(
-            "SELECT event_type, timestamp FROM uptime_records ORDER BY id ASC"
-        ).fetchall()
-    return [(typ, datetime.fromisoformat(ts)) for typ, ts in rows]
+async def calculate_uptime_stats():
+    async for session in get_db():
+        result = await session.execute(text('''
+            SELECT event_type, timestamp
+            FROM uptime_records
+            ORDER BY timestamp ASC
+        '''))
+        events = result.fetchall()
 
-def calculate_uptime_stats():
-    events = get_all_events()
     if not events:
-        return {"total_up_sec": 0, "total_down_sec": 0, "uptime_pct": 100.0, "status": "never_started"}
+        return {
+            "uptime_pct": 0.0,
+            "total_up": "0s",
+            "total_down": "0s",
+            "status": "unknown",
+            "last_event_time": "No events recorded"
+        }
 
-    now = datetime.utcnow()
-    total_up = timedelta(0)
-    total_down = timedelta(0)
-    last_time = events[0][1]  # start from first event
+    total_up = timedelta()
+    total_down = timedelta()
     is_running = False
+    last_ts = None
+    last_event_type = None
 
-    for typ, ts in events:
-        if last_time is not None:
-            delta = ts - last_time
-            if is_running:
+    for event_type, ts in events:
+        if last_ts:
+            delta = ts - last_ts
+            if last_event_type == "start":
                 total_up += delta
-            else:
+            elif last_event_type in ("stop", "crash"):
                 total_down += delta
 
-        if typ == "start":
+        last_ts = ts
+        last_event_type = event_type
+
+        if event_type == "start":
             is_running = True
-        elif typ in ("stop", "crash"):
+        elif event_type in ("stop", "crash"):
             is_running = False
 
-        last_time = ts
-
-    # If still running at the end (no final stop/crash), count until now
-    if is_running and last_time:
-        current_up = now - last_time
-        total_up += current_up
+    # If still running, add time to now
+    if is_running and last_ts:
+        now = datetime.utcnow()
+        delta = now - last_ts
+        total_up += delta
 
     total_time = total_up + total_down
-    uptime_pct = 100.0 if total_time.total_seconds() == 0 else (total_up.total_seconds() / total_time.total_seconds() * 100)
+    uptime_pct = (total_up.total_seconds() / total_time.total_seconds() * 100) if total_time.total_seconds() > 0 else 0.0
+
+    def format_td(td):
+        days = td.days
+        hours, rem = divmod(td.seconds, 3600)
+        mins, secs = divmod(rem, 60)
+        parts = []
+        if days: parts.append(f"{days}d")
+        if hours: parts.append(f"{hours}h")
+        if mins: parts.append(f"{mins}m")
+        if secs or not parts: parts.append(f"{secs}s")
+        return " ".join(parts)
 
     status = "running" if is_running else "stopped"
+    last_event_time = f"{last_event_type} at {last_ts}" if last_ts else "N/A"
 
-    return {
-        "total_up_sec": int(total_up.total_seconds()),
-        "total_down_sec": int(total_down.total_seconds()),
+    stats = {
         "uptime_pct": uptime_pct,
+        "total_up": format_td(total_up),
+        "total_down": format_td(total_down),
         "status": status,
-        "last_event_time": last_time.isoformat() if last_time else None
+        "last_event_time": last_event_time
     }
+    print(f"[UPTIME] {datetime.utcnow()} UTC | Up: {stats['total_up']} | Down: {stats['total_down']} | {stats['uptime_pct']:.3f}% | Status: {stats['status']}")
+    return stats
 
-# ────────────────────────────────────────────────
-# Print in yellow + save snapshot
-# ────────────────────────────────────────────────
-def print_uptime_stats(s):
-    now_str = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-    up_str = str(timedelta(seconds=s['total_up_sec']))
-    down_str = str(timedelta(seconds=s['total_down_sec']))
-    line = f"{YELLOW}[UPTIME] {now_str} | Up: {up_str} | Down: {down_str} | {s['uptime_pct']:.3f}% | Status: {s['status']}{RESET}"
-    print(line)
+async def save_stats_snapshot(stats):
+    async for session in get_db():
+        await session.execute(text('''
+            INSERT INTO uptime_stats (uptime_pct, total_up, total_down, status)
+            VALUES (:pct, :up, :down, :status)
+        '''), {
+            "pct": stats["uptime_pct"],
+            "up": stats["total_up"],
+            "down": stats["total_down"],
+            "status": stats["status"]
+        })
+        await session.commit()
+    print("[uptime_plugin] Saved stats snapshot to MySQL")
 
-def save_stats_snapshot(s):
-    now = datetime.utcnow().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute('''
-            INSERT INTO uptime_stats 
-            (timestamp, total_uptime_sec, total_downtime_sec, uptime_percentage)
-            VALUES (?, ?, ?, ?)
-        ''', (now, s['total_up_sec'], s['total_down_sec'], s['uptime_pct']))
-        conn.commit()
-
-# ────────────────────────────────────────────────
-# Periodic printer + saver (daemon thread)
-# ────────────────────────────────────────────────
-def periodic_update():
-    print("[uptime_plugin] Periodic thread started (every 60s)")
+async def periodic_update():
     while True:
-        s = calculate_uptime_stats()
-        print_uptime_stats(s)
-        save_stats_snapshot(s)
-        time.sleep(60)
+        stats = await calculate_uptime_stats()
+        await save_stats_snapshot(stats)
+        await asyncio.sleep(60)
 
-# ────────────────────────────────────────────────
-# /uptime command
-# ────────────────────────────────────────────────
 async def cmd_uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    s = calculate_uptime_stats()
-    up_str = str(timedelta(seconds=s['total_up_sec']))
-    down_str = str(timedelta(seconds=s['total_down_sec']))
+    stats = await calculate_uptime_stats()
     text = (
-        f"**Uptime Statistics**\n"
-        f"• Status: **{s['status'].upper()}**\n"
-        f"• Total uptime: {up_str}\n"
-        f"• Total downtime: {down_str}\n"
-        f"• Uptime percentage: **{s['uptime_pct']:.3f}%**\n"
-        f"• Last event: {s['last_event_time'] or 'N/A'}"
+        f"**Lifetime Uptime Stats**\n"
+        f"• Status: **{stats['status'].upper()}**\n"
+        f"• Uptime percentage: **{stats['uptime_pct']:.3f}%**\n"
+        f"• Total uptime: **{stats['total_up']}**\n"
+        f"• Total downtime: **{stats['total_down']}**\n"
+        f"• Last event: {stats['last_event_time'] or 'N/A'}"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
-# ────────────────────────────────────────────────
-# Startup + shutdown
-# ────────────────────────────────────────────────
-init_db()
+def initialize():
+    asyncio.create_task(init_mysql())
+    asyncio.create_task(init_db())
+    asyncio.create_task(periodic_update())
 
-# Record start on every launch
-with sqlite3.connect(DB_PATH) as conn:
-    conn.execute(
-        "INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
-        ("start", datetime.utcnow().isoformat())
-    )
-    conn.commit()
+    # Register /uptime command
+    from telegram.ext import Application
+    def register(app: Application):
+        app.add_handler(CommandHandler("uptime", cmd_uptime))
+        print("[uptime_plugin] /uptime command registered")
 
-# Initial print + save
-s = calculate_uptime_stats()
-print_uptime_stats(s)
-save_stats_snapshot(s)
+    # Record initial start on every launch
+    async for session in get_db():
+        await session.execute(text('''
+            INSERT INTO uptime_records (event_type, timestamp)
+            VALUES ('start', NOW())
+        '''))
+        await session.commit()
+    print("[uptime_plugin] Initial start recorded in MySQL")
 
-# Start periodic thread
-thread = threading.Thread(target=periodic_update, daemon=True)
-thread.start()
+    print("[uptime_plugin] Initialized – MySQL mode, periodic updates every 60s")
 
-# Graceful shutdown: record stop/crash
-def on_shutdown():
-    now = datetime.utcnow().isoformat()
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "INSERT INTO uptime_records (event_type, timestamp) VALUES (?, ?)",
-            ("stop", now)
-        )
-        conn.commit()
-    print("[uptime_plugin] Shutdown recorded")
+# Graceful shutdown hook (record stop)
+import atexit
 
-atexit.register(on_shutdown)
+async def on_shutdown():
+    async for session in get_db():
+        await session.execute(text('''
+            INSERT INTO uptime_records (event_type, timestamp)
+            VALUES ('stop', NOW())
+        '''))
+        await session.commit()
+    print("[uptime_plugin] Shutdown recorded in MySQL")
 
-# Register command
-def register(app: Application):
-    app.add_handler(CommandHandler("uptime", cmd_uptime))
-    print("[uptime_plugin] /uptime command registered")
+atexit.register(lambda: asyncio.run(on_shutdown()))
