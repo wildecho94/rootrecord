@@ -1,7 +1,7 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
 # Token from config_telegram.json, absolute import for start
-# Single polling + single command load enforced
+# Single polling start enforced, no duplicates, log incoming updates
 
 import logging
 import asyncio
@@ -58,7 +58,7 @@ def load_token():
 
 BOT_TOKEN = load_token()
 
-# Global app + lock to prevent any duplicate init
+# Global app + lock
 application: Application = None
 _init_lock = asyncio.Lock()
 
@@ -67,7 +67,18 @@ async def init_db():
         await conn.execute(text("SELECT 1"))
     logger.info("[telegram_plugin] DB connection tested")
 
+async def log_update(update: Update):
+    if update.message:
+        text = update.message.text or "[media/non-text]"
+        username = update.effective_user.username or 'no username'
+        logger.info(f"Incoming message from {update.effective_user.id} ({username}): {text}")
+    elif update.callback_query:
+        logger.info(f"Incoming callback from {update.effective_user.id}: {update.callback_query.data}")
+    else:
+        logger.info(f"Incoming update type: {type(update)}")
+
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await log_update(update)
     if not update.message or not update.message.location:
         return
 
@@ -90,10 +101,11 @@ async def bot_main():
     global application
 
     async with _init_lock:
-        # Strong guard: if app exists and is running → skip everything
-        if application is not None and application.running:
-            logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
-            return
+        if application is not None:
+            if application.running:
+                logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
+                return
+            logger.warning("[telegram_plugin] Reusing existing application instance")
 
         logger.info("[telegram_plugin] Creating Application...")
         application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -109,7 +121,7 @@ async def bot_main():
         application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
         application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
 
-        # Dynamic command loading - only runs once, here
+        # Dynamic command loading - only once, when creating fresh app
         loaded = set()
         for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
             if path.name.startswith('__'):
@@ -141,7 +153,6 @@ async def bot_main():
 
         logger.info("[telegram_plugin] Polling active - bot is online and listening")
 
-        # Keep alive loop
         while True:
             await asyncio.sleep(3600)
 
