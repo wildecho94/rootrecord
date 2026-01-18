@@ -1,6 +1,7 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
-# Fixed: polling starts ONLY ONCE (guard + lock), single command load pass, log incoming updates, safe location handler
+# Token from config_telegram.json, absolute import for start
+# Edit: dynamic command loading now inside guard → only runs once
 
 import logging
 import asyncio
@@ -66,18 +67,7 @@ async def init_db():
         await conn.execute(text("SELECT 1"))
     logger.info("[telegram_plugin] DB connection tested")
 
-async def log_update(update: Update):
-    if update.message:
-        text = update.message.text or "[media/non-text]"
-        username = update.effective_user.username or 'no username'
-        logger.info(f"Incoming message from {update.effective_user.id} ({username}): {text}")
-    elif update.callback_query:
-        logger.info(f"Incoming callback from {update.effective_user.id}: {update.callback_query.data}")
-    else:
-        logger.info(f"Incoming update type: {type(update)}")
-
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await log_update(update)
     if not update.message or not update.message.location:
         return
 
@@ -118,7 +108,7 @@ async def bot_main():
         application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
         application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
 
-        # Dynamic command loading - single pass, only when building new app
+        # Dynamic command loading - ONLY here, once per fresh app creation
         loaded = set()
         for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
             if path.name.startswith('__'):
