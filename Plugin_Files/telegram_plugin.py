@@ -1,6 +1,6 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
-# Fixed: prevent double start/polling, single dynamic load pass, config_telegram.json token
+# Fixed: only one bot_main task runs (guard + single initialize/start/polling), no duplicate dynamic loading
 
 import logging
 import asyncio
@@ -57,8 +57,9 @@ def load_token():
 
 BOT_TOKEN = load_token()
 
-# Global app
+# Global app + lock to prevent double init
 application: Application = None
+_init_lock = asyncio.Lock()
 
 async def init_db():
     async with engine.begin() as conn:
@@ -87,55 +88,57 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 async def bot_main():
     global application
 
-    if application and application.running:
-        logger.warning("[telegram_plugin] Application already running - skipping duplicate start")
-        return
+    async with _init_lock:
+        if application and application.running:
+            logger.info("[telegram_plugin] Application already running - skipping")
+            return
 
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Core handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.LOCATION, handle_location))
-    application.add_error_handler(error_handler)
+        # Core handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(MessageHandler(filters.LOCATION, handle_location))
+        application.add_error_handler(error_handler)
 
-    # Finance handlers
-    application.add_handler(CommandHandler("finance", finance_menu))
-    application.add_handler(CallbackQueryHandler(button_handler, pattern="^fin_"))
-    application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
-    application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
+        # Finance handlers
+        application.add_handler(CommandHandler("finance", finance_menu))
+        application.add_handler(CallbackQueryHandler(button_handler, pattern="^fin_"))
+        application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
+        application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
 
-    # Dynamic command loading - single pass
-    loaded = set()
-    for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
-        if path.name.startswith('__'):
-            continue
-        cmd_name = path.stem.replace("_cmd", "")
-        if cmd_name in loaded:
-            continue  # skip duplicates
-        module_name = f"commands.{path.stem}"
-        try:
-            spec = importlib.util.spec_from_file_location(module_name, path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            if hasattr(module, "handler"):
-                application.add_handler(module.handler)
-                logger.info(f"[telegram_plugin] Loaded /{cmd_name}")
-                loaded.add(cmd_name)
-            else:
-                logger.warning(f"[telegram_plugin] {path.name} missing 'handler'")
-        except Exception as e:
-            logger.error(f"[telegram_plugin] Failed loading {path.name}: {e}")
+        # Dynamic command loading - single pass
+        loaded = set()
+        for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
+            if path.name.startswith('__'):
+                continue
+            cmd_name = path.stem.replace("_cmd", "")
+            if cmd_name in loaded:
+                continue
+            module_name = f"commands.{path.stem}"
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                if hasattr(module, "handler"):
+                    application.add_handler(module.handler)
+                    logger.info(f"[telegram_plugin] Loaded /{cmd_name}")
+                    loaded.add(cmd_name)
+                else:
+                    logger.warning(f"[telegram_plugin] {path.name} missing 'handler'")
+            except Exception as e:
+                logger.error(f"[telegram_plugin] Failed loading {path.name}: {e}")
 
-    logger.info("[telegram_plugin] Starting polling...")
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
+        logger.info("[telegram_plugin] Starting polling...")
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True
+        )
 
-    while True:
-        await asyncio.sleep(3600)
+        # Keep alive
+        while True:
+            await asyncio.sleep(3600)
 
 async def shutdown_bot():
     global application
