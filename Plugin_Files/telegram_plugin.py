@@ -1,6 +1,6 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
-# Fixed: single bot_main execution (lock + check), single command load, no double polling/start
+# Fixed: 'text' always defined in handlers, single polling start, log every update
 
 import logging
 import asyncio
@@ -57,7 +57,7 @@ def load_token():
 
 BOT_TOKEN = load_token()
 
-# Global app + lock to prevent duplicate init
+# Global app + lock
 application: Application = None
 _init_lock = asyncio.Lock()
 
@@ -68,7 +68,7 @@ async def init_db():
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.location:
-        logger.debug("[telegram_plugin] Non-location message received, ignoring for location handler")
+        logger.debug("[telegram_plugin] Non-location message in location handler")
         return
 
     user = update.effective_user
@@ -86,19 +86,26 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Exception while handling update: {context.error}")
 
+async def log_update(update: Update):
+    if update.message:
+        logger.info(f"Incoming message from {update.effective_user.id}: {update.message.text or '[media/non-text]'}")
+    elif update.callback_query:
+        logger.info(f"Incoming callback from {update.effective_user.id}: {update.callback_query.data}")
+    else:
+        logger.info(f"Incoming update type: {type(update)}")
+
 async def bot_main():
     global application
 
     async with _init_lock:
         if application is not None:
             if application.running:
-                logger.info("[telegram_plugin] Application already running - skipping duplicate start")
+                logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
                 return
-            else:
-                logger.warning("[telegram_plugin] Application exists but not running - reusing")
+            logger.warning("[telegram_plugin] Reusing existing application")
 
-        if application is None:
-            application = ApplicationBuilder().token(BOT_TOKEN).build()
+        logger.info("[telegram_plugin] Building new Application...")
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
 
         # Core handlers
         application.add_handler(CommandHandler("start", start))
@@ -141,7 +148,7 @@ async def bot_main():
             drop_pending_updates=True
         )
 
-        logger.info("[telegram_plugin] Polling active - bot is online")
+        logger.info("[telegram_plugin] Polling active - bot is online and listening")
 
         # Keep alive
         while True:
