@@ -1,7 +1,7 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
 # Token from config_telegram.json, absolute import for start
-# Single polling start enforced, no duplicates
+# Single polling start enforced, no duplicates, log incoming updates
 
 import logging
 import asyncio
