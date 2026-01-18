@@ -1,0 +1,817 @@
+Starting Rootrecord system...
+Press Ctrl+C to stop
+[Fri 01/16/2026 21:03:56.86] Running publish_rootrecord.py...
+Publishing 'rootrecord' to GitHub...
+Working directory set to: C:\Users\Alexrs94\Desktop\programfiles\rootrecord
+Checking repo...
+Running: git remote -v
+origin https://github.com/wildecho94/rootrecord.git (fetch)
+origin https://github.com/wildecho94/rootrecord.git (push)
+Repo already exists - using existing one.
+Removing deleted/moved files from index...
+Running: git add -u
+Adding files...
+Running: git add .
+Committing...
+Running: git commit -m "Auto update: include recent log + changes - 2026-01-16 21:03:57" || echo "No changes to commit"
+On branch main
+nothing to commit, working tree clean
+"No changes to commit"
+Pushing to main...
+Running: git push origin main
+Everything up-to-date
+DONE!
+Repo live at: https://github.com/wildecho94/rootrecord
+[Fri 01/16/2026 21:03:58.70] Starting core.py ...
+[2026-01-16 21:03:59.110] Removed **pycache**: C:\Users\Alexrs94\Desktop\programfiles\rootrecord\commands_*pycache*_
+[2026-01-16 21:03:59.116] Removed **pycache**: C:\Users\Alexrs94\Desktop\programfiles\rootrecord\Plugin_Files_*pycache*_
+[2026-01-16 21:03:59.118] Removed **pycache**: C:\Users\Alexrs94\Desktop\programfiles\rootrecord\utils_*pycache*_
+[2026-01-16 21:03:59.119] Cleared 3 **pycache** folder(s)
+[2026-01-16 21:03:59.120] RootRecord initialization complete (MySQL mode)
+[2026-01-16 21:03:59.121] RootRecord is running. Press Ctrl+C to stop.
+[2026-01-16 21:03:59.123] [core] Main asyncio loop running - background tasks active
+[blank_plugin] blank_plugin loaded
+[2026-01-16 21:03:59.128] [plugins] blank_plugin has no initialize()
+[dashboard_snapshot] Initializing...
+[dashboard_snapshot] Ensured dashboard_totals table exists
+[dashboard_snapshot] Initialized – running 10-min updates
+[2026-01-16 21:03:59.907] [plugins] Auto-initialized dashboard_snapshot_plugin
+[fillup_plugin] Initialized – /fillup ready
+[2026-01-16 21:04:00.329] [plugins] Auto-initialized fillup_plugin
+[finance_plugin] Initialized – MySQL ready
+[2026-01-16 21:04:00.335] [plugins] Auto-initialized finance_plugin
+[geopy_plugin] Initialized – waiting for pings to enrich
+[2026-01-16 21:04:00.544] [plugins] Auto-initialized geopy_plugin
+[mpg_plugin] Initialized – /mpg command ready (using MySQL via vehicles_plugin)
+[2026-01-16 21:04:00.552] [plugins] Auto-initialized mpg_plugin
+[telegram_plugin] Logging initialized - VERBOSE mode ON
+[telegram_plugin] Root path: C:\Users\Alexrs94\Desktop\programfiles\rootrecord
+[telegram_plugin] Token loaded successfully
+[telegram_plugin] initialize() called
+[telegram_plugin] Launching bot thread...
+2026-01-16 21:04:00,558 [DEBUG] asyncio: Using proactor: IocpProactor
+[2026-01-16 21:04:00.558] [plugins] Auto-initialized telegram_plugin
+[telegram_plugin] Starting bot...
+[uptime_plugin] Database tables ready
+[UPTIME] 2026-01-16 21:04:00 UTC | Up: 3 days, 16:29:37 | Down: 1:44:53 | 98.063% | Status: running
+[uptime_plugin] Periodic thread started (every 60s)
+[2026-01-16 21:04:00.606] [plugins] uptime_plugin has no initialize()
+[vehicles_plugin] Initialized – MySQL vehicles + fuel stats ready
+[2026-01-16 21:04:00.608] [plugins] Auto-initialized vehicles_plugin
+[dashboard_snapshot] Starting periodic updates (every 10 min)
+[db_mysql] Testing MySQL connection...
+2026-01-16 21:04:00,619 [DEBUG] mysql.connector: Building SSL context
+[fillup_plugin] Creating/updating fuel_records table in MySQL...
+[db_mysql] Testing MySQL connection...
+[finance_plugin] Creating/updating finance_records table in MySQL...
+[UPTIME] 2026-01-16 21:04:00 UTC | Up: 3 days, 16:29:37 | Down: 1:44:53 | 98.063% | Status: running
+[db_mysql] Testing MySQL connection...
+[geopy_plugin] Creating/updating geopy_enriched table in MySQL...
+[telegram_plugin] Creating/updating gps_records table...
+[db_mysql] Testing MySQL connection...
+2026-01-16 21:04:00,681 [DEBUG] mysql.connector: Switching to SSL
+[vehicles_plugin] Creating/updating vehicles & fuel_records tables in MySQL...
+2026-01-16 21:04:00,689 [DEBUG] mysql.connector: SSL has been enabled
+2026-01-16 21:04:00,691 [DEBUG] mysql.connector: Starting authorization phase
+2026-01-16 21:04:00,691 [DEBUG] mysql.connector: The provided initial strategy is caching_sha2_password
+2026-01-16 21:04:00,695 [DEBUG] mysql.connector: Exchanging further packets
+2026-01-16 21:04:00,696 [DEBUG] mysql.connector: caching_sha2_password completed succesfully
+[dashboard_snapshot] Totals updated
+[db_mysql] MySQL connected! Version: 9.5.0
+[db_mysql] Ready – single self-hosted local DB (localhost only)
+[db_mysql] MySQL connected! Version: 9.5.0
+[db_mysql] Ready – single self-hosted local DB (localhost only)
+[db_mysql] MySQL connected! Version: 9.5.0
+[db_mysql] Ready – single self-hosted local DB (localhost only)
+[db_mysql] MySQL connected! Version: 9.5.0
+[db_mysql] Ready – single self-hosted local DB (localhost only)
+2026-01-16 21:04:00,727 [WARNING] asyncmy: Table 'fuel_records' already exists
+[fillup_plugin] Index idx_vehicle_fill_date already exists
+2026-01-16 21:04:00,732 [WARNING] asyncmy: Table 'finance_records' already exists
+[fillup_plugin] Fuel table and index ready in MySQL
+[finance_plugin] Index idx_type_timestamp already exists
+2026-01-16 21:04:00,737 [WARNING] asyncmy: Table 'geopy_enriched' already exists
+2026-01-16 21:04:00,737 [WARNING] asyncmy: Table 'gps_records' already exists
+2026-01-16 21:04:00,737 [WARNING] asyncmy: Table 'vehicles' already exists
+[finance_plugin] Finance table and index ready in MySQL
+[telegram_plugin] GPS records table ready
+[geopy_plugin] Index idx_ping_id already exists
+[geopy_plugin] Geopy table and index ready in MySQL
+2026-01-16 21:04:00,744 [WARNING] asyncmy: Table 'fuel_records' already exists
+[vehicles_plugin] Vehicles & fuel tables ready in MySQL
+[telegram_plugin] Loading commands...
+[commands] Loaded /start
+[telegram_plugin] Adding handlers...
+[telegram_plugin] Initializing...
+2026-01-16 21:04:02,431 [DEBUG] httpcore.connection: connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-01-16 21:04:02,586 [DEBUG] httpcore.connection: connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001E43B03DD30>
+2026-01-16 21:04:02,586 [DEBUG] httpcore.connection: start_tls.started ssl_context=<ssl.SSLContext object at 0x000001E43B00FE30> server_hostname='api.telegram.org' timeout=5.0
+2026-01-16 21:04:02,719 [DEBUG] httpcore.connection: start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001E43AF1E350>
+2026-01-16 21:04:02,719 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:02,720 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:02,720 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:02,721 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:02,721 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:02,852 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'290'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:02,853 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:02,853 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:02,853 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:02,854 [DEBUG] httpcore.http11: response_closed.complete
+[telegram_plugin] Starting...
+2026-01-16 21:04:02,854 [INFO] telegram.ext.Application: Application started
+[telegram_plugin] Polling...
+2026-01-16 21:04:02,855 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:02,856 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:02,856 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:02,856 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:02,857 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:02,983 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:02,984 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:02,984 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:02,984 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:02,985 [DEBUG] httpcore.http11: response_closed.complete
+[telegram_plugin] Polling active
+2026-01-16 21:04:02,985 [DEBUG] httpcore.connection: connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2026-01-16 21:04:03,124 [DEBUG] httpcore.connection: connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001E43B088A50>
+2026-01-16 21:04:03,124 [DEBUG] httpcore.connection: start_tls.started ssl_context=<ssl.SSLContext object at 0x000001E43B00FED0> server_hostname='api.telegram.org' timeout=5.0
+2026-01-16 21:04:03,262 [DEBUG] httpcore.connection: start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001E43B028770>
+2026-01-16 21:04:03,263 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:03,263 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:03,264 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:03,264 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:03,264 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:06,573 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:06 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'485'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:06,573 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:06,573 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:06,574 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:06,574 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:06,576 [ERROR] telegram_plugin: [gps] Failed to save location: Task <Task pending name='Application:8543090241:update_fetcher' coro=<Application._update_fetcher() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_application.py:1258>> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:06,576 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception during reset or similar
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 985, in _finalize_fairy
+    fairy._reset(
+    ~~~~~~~~~~~~^
+        pool,
+        ^^^^^
+    ...<2 lines>...
+        asyncio_safe=can_manipulate_connection,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 1433, in _reset
+    pool._dialect.do_rollback(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 374, in rollback
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 91, in *handle_exception
+    raise error
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 372, in rollback
+    self.await*(self._connection.rollback())
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "asyncmy/connection.pyx", line 418, in rollback
+  File "asyncmy/connection.pyx", line 381, in _read_ok_packet
+  File "asyncmy/connection.pyx", line 623, in read_packet
+  File "asyncmy/connection.pyx", line 662, in _read_bytes
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 769, in readexactly
+    await self._wait_for_data('readexactly')
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 539, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-26' coro=<<async_generator_athrow without **name**>()>> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:06,585 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception terminating connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AE97750>>
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 372, in _close_connection
+    self.*dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 199, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await*(asyncio.shield(self._terminate_graceful_close())) # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 117, in _terminate_graceful_close
+    await self._connection.ensure_closed()
+  File "asyncmy/connection.pyx", line 367, in ensure_closed
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 358, in wait_closed
+    await self._protocol._get_close_waiter(self)
+RuntimeError: Task <Task pending name='Task-27' coro=<AsyncAdapt_asyncmy_connection._terminate_graceful_close() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py:117> cb=[shield.<locals>._inner_done_callback() at C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\tasks.py:958]> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:07,078 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:07,079 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:07,079 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:07,080 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:07,080 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:15,675 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:15 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'415'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:15,676 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:15,676 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:15,677 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:15,677 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:15,679 [ERROR] telegram.ext.Application: No error handlers are registered, logging exception.
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_application.py", line 1335, in process_update
+    await coroutine
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\Desktop\programfiles\rootrecord\commands\start_cmd.py", line 20, in start
+    await session.execute(text("""
+    ...<7 lines>...
+    """))
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\ext\asyncio\session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\orm\session.py", line 2351, in execute
+    return self._execute_internal(
+           ~~~~~~~~~~~~~~~~~~~~~~^
+        statement,
+        ^^^^^^^^^^
+    ...<4 lines>...
+        _add_event=_add_event,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\orm\session.py", line 2258, in _execute_internal
+    result = conn.execute(
+        statement, params or {}, execution_options=execution_options
+    )
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\sql\elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 2366, in _handle_dbapi_exception
+    raise exc_info[1].with_traceback(exc_info[2])
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 230, in execute
+    self._adapt_connection._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 91, in *handle_exception
+    raise error
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 228, in execute
+    return self.await*(self._execute_async(operation, parameters))
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 251, in _execute_async
+    result = await self._cursor.execute(operation, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncmy/cursors.pyx", line 179, in execute
+  File "asyncmy/cursors.pyx", line 364, in _query
+  File "asyncmy/connection.pyx", line 500, in query
+  File "asyncmy/connection.pyx", line 688, in _read_query_result
+  File "asyncmy/connection.pyx", line 1075, in read
+  File "asyncmy/connection.pyx", line 623, in read_packet
+  File "asyncmy/connection.pyx", line 662, in _read_bytes
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 769, in readexactly
+    await self._wait_for_data('readexactly')
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 539, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Application:8543090241:update_fetcher' coro=<Application._update_fetcher() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_application.py:1258>> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:15,695 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception during reset or similar
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 985, in _finalize_fairy
+    fairy._reset(
+    ~~~~~~~~~~~~^
+        pool,
+        ^^^^^
+    ...<2 lines>...
+        asyncio_safe=can_manipulate_connection,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 1433, in _reset
+    pool._dialect.do_rollback(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 374, in rollback
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 91, in *handle_exception
+    raise error
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 372, in rollback
+    self.await*(self._connection.rollback())
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "asyncmy/connection.pyx", line 418, in rollback
+  File "asyncmy/connection.pyx", line 381, in _read_ok_packet
+  File "asyncmy/connection.pyx", line 623, in read_packet
+  File "asyncmy/connection.pyx", line 662, in _read_bytes
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 769, in readexactly
+    await self._wait_for_data('readexactly')
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 539, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-31' coro=<<async_generator_athrow without **name**>()>> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:15,697 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception terminating connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AE94F50>>
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 372, in _close_connection
+    self.*dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 199, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await*(asyncio.shield(self._terminate_graceful_close())) # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 117, in _terminate_graceful_close
+    await self._connection.ensure_closed()
+  File "asyncmy/connection.pyx", line 367, in ensure_closed
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 358, in wait_closed
+    await self._protocol._get_close_waiter(self)
+RuntimeError: Task <Task pending name='Task-32' coro=<AsyncAdapt_asyncmy_connection._terminate_graceful_close() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py:117> cb=[shield.<locals>._inner_done_callback() at C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\tasks.py:958]> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:16,202 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:16,203 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:16,203 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:16,204 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:16,204 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:22,476 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:22 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'368'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:22,476 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:22,477 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:22,477 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:22,477 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:22,478 [DEBUG] telegram_plugin: Message from 6644482344: Start not working
+2026-01-16 21:04:22,990 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:22,991 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:22,991 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:22,991 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:22,991 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:29,742 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:29 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'418'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:29,742 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:29,743 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:29,743 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:29,743 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:30,255 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:30,255 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:30,255 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:30,256 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:30,256 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:37,369 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:37 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'485'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:37,370 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:37,370 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:37,370 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:37,371 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:37,372 [ERROR] telegram_plugin: [gps] Failed to save location: Task <Task pending name='Application:8543090241:update_fetcher' coro=<Application._update_fetcher() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_application.py:1258>> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:37,373 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception during reset or similar
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 985, in _finalize_fairy
+    fairy._reset(
+    ~~~~~~~~~~~~^
+        pool,
+        ^^^^^
+    ...<2 lines>...
+        asyncio_safe=can_manipulate_connection,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 1433, in _reset
+    pool._dialect.do_rollback(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 374, in rollback
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 91, in *handle_exception
+    raise error
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 372, in rollback
+    self.await*(self._connection.rollback())
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "asyncmy/connection.pyx", line 418, in rollback
+  File "asyncmy/connection.pyx", line 381, in _read_ok_packet
+  File "asyncmy/connection.pyx", line 623, in read_packet
+  File "asyncmy/connection.pyx", line 662, in _read_bytes
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 769, in readexactly
+    await self._wait_for_data('readexactly')
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 539, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-40' coro=<<async_generator_athrow without **name**>()>> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:37,376 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception terminating connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AEA41A0>>
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 372, in _close_connection
+    self.*dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 199, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await*(asyncio.shield(self._terminate_graceful_close())) # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 117, in _terminate_graceful_close
+    await self._connection.ensure_closed()
+  File "asyncmy/connection.pyx", line 367, in ensure_closed
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 358, in wait_closed
+    await self._protocol._get_close_waiter(self)
+RuntimeError: Task <Task pending name='Task-41' coro=<AsyncAdapt_asyncmy_connection._terminate_graceful_close() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py:117> cb=[shield.<locals>._inner_done_callback() at C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\tasks.py:958]> got Future <Future pending> attached to a different loop
+2026-01-16 21:04:37,885 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:37,885 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:37,885 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:37,886 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:37,886 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:43,335 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:43 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'431'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:43,336 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:43,336 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:43,336 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:43,337 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:43,337 [DEBUG] telegram_plugin: Message from 6644482344: ./vehicles not working
+2026-01-16 21:04:43,840 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:43,840 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:43,841 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:43,841 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:43,841 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:51,376 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:51 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'416'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:51,376 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:51,376 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:51,377 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:51,377 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:51,882 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:51,883 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:51,883 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:51,883 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:51,884 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:59,135 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:04:59 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'370'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:04:59,136 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:04:59,136 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:04:59,136 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:04:59,137 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:04:59,137 [DEBUG] telegram_plugin: Message from 6644482344: .fillup not working
+2026-01-16 21:04:59,653 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:04:59,653 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:04:59,653 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:04:59,654 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:04:59,654 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+[UPTIME] 2026-01-16 21:05:00 UTC | Up: 3 days, 16:30:37 | Down: 1:44:53 | 98.063% | Status: running
+2026-01-16 21:05:07,726 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:07 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'486'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:07,727 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:07,727 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:07,727 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:07,728 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:07,729 [ERROR] telegram_plugin: [gps] Failed to save location: Task <Task pending name='Application:8543090241:update_fetcher' coro=<Application._update_fetcher() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_application.py:1258>> got Future <Future pending> attached to a different loop
+2026-01-16 21:05:07,730 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception during reset or similar
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 985, in _finalize_fairy
+    fairy._reset(
+    ~~~~~~~~~~~~^
+        pool,
+        ^^^^^
+    ...<2 lines>...
+        asyncio_safe=can_manipulate_connection,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 1433, in _reset
+    pool._dialect.do_rollback(self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 374, in rollback
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 91, in *handle_exception
+    raise error
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 372, in rollback
+    self.await*(self._connection.rollback())
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "asyncmy/connection.pyx", line 418, in rollback
+  File "asyncmy/connection.pyx", line 381, in _read_ok_packet
+  File "asyncmy/connection.pyx", line 623, in read_packet
+  File "asyncmy/connection.pyx", line 662, in _read_bytes
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 769, in readexactly
+    await self._wait_for_data('readexactly')
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 539, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-51' coro=<<async_generator_athrow without **name**>()>> got Future <Future pending> attached to a different loop
+2026-01-16 21:05:07,732 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception terminating connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AE95950>>
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 372, in _close_connection
+    self.*dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 199, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await*(asyncio.shield(self._terminate_graceful_close())) # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 117, in _terminate_graceful_close
+    await self._connection.ensure_closed()
+  File "asyncmy/connection.pyx", line 367, in ensure_closed
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 358, in wait_closed
+    await self._protocol._get_close_waiter(self)
+RuntimeError: Task <Task pending name='Task-52' coro=<AsyncAdapt_asyncmy_connection._terminate_graceful_close() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py:117> cb=[shield.<locals>._inner_done_callback() at C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\tasks.py:958]> got Future <Future pending> attached to a different loop
+2026-01-16 21:05:08,237 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:08,238 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:08,238 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:08,238 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:08,239 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:14,697 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:14 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'413'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:14,698 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:14,698 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:14,699 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:14,699 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:15,216 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:15,217 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:15,217 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:15,218 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:15,218 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:22,059 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:22 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'367'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:22,059 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:22,060 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:22,060 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:22,060 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:22,061 [DEBUG] telegram_plugin: Message from 6644482344: .mpg not working
+2026-01-16 21:05:22,570 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:22,570 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:22,570 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:22,571 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:22,571 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:25,973 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:25 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'417'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:25,974 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:25,974 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:25,975 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:25,975 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:26,480 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:26,480 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:26,480 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:26,481 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:26,481 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:31,883 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:31 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'362'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:31,883 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:31,884 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:31,884 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:31,884 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:31,885 [DEBUG] telegram_plugin: Message from 6644482344: .finance no
+2026-01-16 21:05:32,389 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:32,389 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:32,389 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:32,390 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:32,390 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:35,740 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:35 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'416'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:35,741 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:35,741 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:35,742 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:35,742 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:36,248 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:36,248 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:36,249 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:36,249 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:36,249 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:37,739 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:37 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'486'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:37,739 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:37,740 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:37,740 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:37,740 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:37,742 [ERROR] telegram_plugin: [gps] Failed to save location: Task <Task pending name='Application:8543090241:update_fetcher' coro=<Application._update_fetcher() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\telegram\ext_application.py:1258>> got Future <Future pending> attached to a different loop
+2026-01-16 21:05:37,743 [ERROR] asyncio: Task exception was never retrieved
+future: <Task finished name='Task-66' coro=<<async_generator_athrow without **name**>()> exception=RuntimeError("Task <Task pending name='Task-66' coro=<<async_generator_athrow without **name**>()>> got Future <Future pending> attached to a different loop")>
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\Desktop\programfiles\rootrecord\utils\db_mysql.py", line 64, in get_db
+    yield session
+GeneratorExit
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\Desktop\programfiles\rootrecord\utils\db_mysql.py", line 69, in get_db
+    await session.close()
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\ext\asyncio\session.py", line 1016, in close
+    await greenlet_spawn(self.sync_session.close)
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\orm\session.py", line 2507, in close
+    self._close_impl(invalidate=False)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\orm\session.py", line 2576, in _close_impl
+    transaction.close(invalidate)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "<string>", line 2, in close
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\orm\session.py", line 1417, in close
+    transaction.close()
+    ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 2597, in close
+    self._do_close()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 2735, in _do_close
+    self._close_impl()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 2721, in _close_impl
+    self._connection_rollback_impl()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 2713, in _connection_rollback_impl
+    self.connection._rollback_impl()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1130, in _rollback_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 2366, in _handle_dbapi_exception
+    raise exc_info[1].with_traceback(exc_info[2])
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 374, in rollback
+    self._handle_exception(error)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 91, in *handle_exception
+    raise error
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 372, in rollback
+    self.await*(self._connection.rollback())
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "asyncmy/connection.pyx", line 418, in rollback
+  File "asyncmy/connection.pyx", line 381, in _read_ok_packet
+  File "asyncmy/connection.pyx", line 623, in read_packet
+  File "asyncmy/connection.pyx", line 662, in _read_bytes
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 769, in readexactly
+    await self._wait_for_data('readexactly')
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 539, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-66' coro=<<async_generator_athrow without **name**>()>> got Future <Future pending> attached to a different loop
+2026-01-16 21:05:38,255 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:38,255 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:38,256 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:38,256 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:38,256 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:42,504 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:42 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'361'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:42,504 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:42,505 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:42,505 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:42,505 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:42,506 [DEBUG] telegram_plugin: Message from 6644482344: .uptime no
+2026-01-16 21:05:43,010 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:43,010 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:43,010 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:43,011 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:43,011 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:53,142 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:53 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:53,143 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:53,143 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:53,143 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:53,144 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:53,645 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:53,646 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:53,646 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:53,647 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:53,647 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:55,872 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:05:55 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'389'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:05:55,873 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:05:55,873 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:05:55,874 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:05:55,874 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:05:55,875 [DEBUG] telegram_plugin: Message from 6644482344: End command check, no commands working
+2026-01-16 21:05:56,377 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:05:56,378 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:05:56,378 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:05:56,378 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:05:56,378 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+[UPTIME] 2026-01-16 21:06:00 UTC | Up: 3 days, 16:31:37 | Down: 1:44:53 | 98.063% | Status: running
+2026-01-16 21:06:06,512 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:06:06 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:06:06,512 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:06:06,512 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:06:06,513 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:06:06,513 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:06:07,021 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:06:07,021 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:06:07,022 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:06:07,022 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:06:07,023 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>
+2026-01-16 21:06:08,669 [DEBUG] httpcore.http11: receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Fri, 16 Jan 2026 21:06:08 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'486'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2026-01-16 21:06:08,670 [DEBUG] httpcore.http11: receive_response_body.started request=<Request [b'POST']>
+2026-01-16 21:06:08,670 [DEBUG] httpcore.http11: receive_response_body.complete
+2026-01-16 21:06:08,670 [DEBUG] httpcore.http11: response_closed.started
+2026-01-16 21:06:08,671 [DEBUG] httpcore.http11: response_closed.complete
+2026-01-16 21:06:08,672 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: Exception terminating connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AE96990>>
+Traceback (most recent call last):
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\pool\base.py", line 372, in _close_connection
+    self.*dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 199, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await*(asyncio.shield(self._terminate_graceful_close())) # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable) # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\util_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py", line 117, in _terminate_graceful_close
+    await self._connection.ensure_closed()
+  File "asyncmy/connection.pyx", line 367, in ensure_closed
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\streams.py", line 358, in wait_closed
+    await self._protocol._get_close_waiter(self)
+RuntimeError: Task <Task pending name='Task-78' coro=<AsyncAdapt_asyncmy_connection._terminate_graceful_close() running at C:\Users\Alexrs94\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\sqlalchemy\dialects\mysql\asyncmy.py:117> cb=[shield.<locals>._inner_done_callback() at C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\asyncio\tasks.py:958]> got Future <Future pending> attached to a different loop
+2026-01-16 21:06:08,674 [ERROR] sqlalchemy.pool.impl.AsyncAdaptedQueuePool: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AE96990>>, which will be terminated. Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling close() or by using appropriate context managers to manage their lifecycle.
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.13_3.13.2544.0_x64__qbz5n2kfra8p0\Lib\weakref.py:367: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncmy.connection.Connection object at 0x000001E43AE96990>>, which will be terminated. Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling close() or by using appropriate context managers to manage their lifecycle.
+  def **init**(self, dict=None):
+2026-01-16 21:06:08,693 [INFO] telegram_plugin: [gps] Saved ping for user 6644482344
+2026-01-16 21:06:09,185 [DEBUG] httpcore.http11: send_request_headers.started request=<Request [b'POST']>
+2026-01-16 21:06:09,186 [DEBUG] httpcore.http11: send_request_headers.complete
+2026-01-16 21:06:09,186 [DEBUG] httpcore.http11: send_request_body.started request=<Request [b'POST']>
+2026-01-16 21:06:09,187 [DEBUG] httpcore.http11: send_request_body.complete
+2026-01-16 21:06:09,187 [DEBUG] httpcore.http11: receive_response_headers.started request=<Request [b'POST']>

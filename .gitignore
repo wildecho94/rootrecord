@@ -1,0 +1,34 @@
+# RootRecord rootrecord/.gitignore
+# Edited Version: 1.42.20260111
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+
+# Project
+logs/
+backups/
+data/rootrecord.db
+publish_rootrecord.py
+
+# Configs
+config_*.json
+
+# Logs - exclude from git
+debug_rootrecord.log
+
+MySQL/
+mysql/
+*.db-shm
+*.db-wal
+*.lock
+*.pid
+# zips
+*.zip
+
+*.exe
