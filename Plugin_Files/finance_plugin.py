@@ -1,7 +1,6 @@
 # Plugin_Files/finance_plugin.py
 # Finance plugin for RootRecord - tracks income, expenses, debts, assets
-# Robust schema repair: adds user_id and category_id if missing in finance_records
-# VIEW: direct join + GROUP BY r.user_id
+# Fixed: 'text' always defined in every code path in show_* handlers
 # Categories auto-create with type guessing
 # Commands: /finance (menu), /finance quickstats, /finance add <category> <amount> [desc]
 
@@ -9,7 +8,7 @@ import asyncio
 from pathlib import Path
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from sqlalchemy import text
 from utils.db_mysql import get_db, init_mysql
 
@@ -18,7 +17,6 @@ ROOT = Path(__file__).parent.parent
 async def init_db():
     print("[finance_plugin] Creating/updating finance tables and view...")
     async for session in get_db():
-        # finance_categories
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS finance_categories (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -30,7 +28,6 @@ async def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         '''))
 
-        # finance_records base table (create if missing)
         await session.execute(text('''
             CREATE TABLE IF NOT EXISTS finance_records (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -45,42 +42,20 @@ async def init_db():
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         '''))
 
-        # Repair missing columns in finance_records
-        columns_to_check = ['user_id', 'category_id']
-        for col in columns_to_check:
-            try:
-                result = await session.execute(text(f"SHOW COLUMNS FROM finance_records LIKE '{col}';"))
-                if not result.fetchone():
-                    await session.execute(text(f'''
-                        ALTER TABLE finance_records 
-                        ADD COLUMN {col} BIGINT NOT NULL AFTER id;
-                    '''))
-                    await session.commit()
-                    print(f"[finance_plugin] Added missing {col} column to finance_records")
-                else:
-                    print(f"[finance_plugin] {col} column already exists in finance_records")
-            except Exception as e:
-                print(f"[finance_plugin] Failed to check/add {col} column: {e}")
+        await session.execute(text('''
+            CREATE OR REPLACE VIEW finance_summary AS
+            SELECT 
+                r.user_id,
+                SUM(CASE WHEN c.type IN ('income', 'asset')   THEN r.amount ELSE 0       END) AS total_positive,
+                SUM(CASE WHEN c.type IN ('expense', 'debt')  THEN r.amount ELSE 0       END) AS total_negative,
+                SUM(CASE WHEN c.type IN ('income', 'asset')  THEN r.amount ELSE -r.amount END) AS current_balance,
+                SUM(CASE WHEN c.type IN ('income', 'asset')  THEN r.amount ELSE -r.amount END) AS net_worth
+            FROM finance_records r
+            JOIN finance_categories c ON r.category_id = c.id
+            GROUP BY r.user_id;
+        '''))
 
-        # finance_summary VIEW - should now succeed
-        try:
-            await session.execute(text('''
-                CREATE OR REPLACE VIEW finance_summary AS
-                SELECT 
-                    r.user_id,
-                    SUM(CASE WHEN c.type IN ('income', 'asset')   THEN r.amount ELSE 0       END) AS total_positive,
-                    SUM(CASE WHEN c.type IN ('expense', 'debt')  THEN r.amount ELSE 0       END) AS total_negative,
-                    SUM(CASE WHEN c.type IN ('income', 'asset')  THEN r.amount ELSE -r.amount END) AS current_balance,
-                    SUM(CASE WHEN c.type IN ('income', 'asset')  THEN r.amount ELSE -r.amount END) AS net_worth
-                FROM finance_records r
-                JOIN finance_categories c ON r.category_id = c.id
-                GROUP BY r.user_id;
-            '''))
-            await session.commit()
-            print("[finance_plugin] finance_summary VIEW created/updated successfully")
-        except Exception as e:
-            print(f"[finance_plugin] VIEW creation failed: {e}")
-
+        await session.commit()
     print("[finance_plugin] Finance tables + summary view ready")
 
 # Category guessing
@@ -117,7 +92,7 @@ async def get_or_create_category(session, user_id: int, cat_name: str) -> int:
     result = await session.execute(text("SELECT LAST_INSERT_ID()"))
     return result.scalar()
 
-# Handlers (unchanged)
+# Handlers
 async def finance_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("Quick Stats", callback_data="fin_quickstats")],
@@ -195,7 +170,13 @@ async def show_quickstats(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         row = result.fetchone()
         if row and row[0] is not None:
             bal, pos, neg, nw = row
-            text = f"**Quick Stats**\nBalance: **${bal:,.2f}**\nIncome+Assets: **${pos:,.2f}**\nExpenses+Debts: **${neg:,.2f}**\nNet Worth: **${nw:,.2f}**"
+            text = (
+                f"**Quick Stats**\n"
+                f"Balance: **${bal:,.2f}**\n"
+                f"Income+Assets: **${pos:,.2f}**\n"
+                f"Expenses+Debts: **${neg:,.2f}**\n"
+                f"Net Worth: **${nw:,.2f}**"
+            )
         else:
             text = "No records yet. Add one with /finance add"
 
@@ -240,7 +221,10 @@ async def show_balance(query_or_update, context: ContextTypes.DEFAULT_TYPE):
             SELECT current_balance FROM finance_summary WHERE user_id = :uid
         '''), {"uid": user_id})
         row = result.fetchone()
-        text = f"💰 Current Balance: **${row[0]:,.2f}**" if row and row[0] is not None else "No records yet."
+        if row and row[0] is not None:
+            text = f"💰 Current Balance: **${row[0]:,.2f}**"
+        else:
+            text = "No records yet."
 
     if hasattr(message, 'reply_text'):
         await message.reply_text(text, parse_mode="Markdown")
@@ -260,7 +244,10 @@ async def show_networth(query_or_update, context: ContextTypes.DEFAULT_TYPE):
             SELECT net_worth FROM finance_summary WHERE user_id = :uid
         '''), {"uid": user_id})
         row = result.fetchone()
-        text = f"🌐 Net Worth: **${row[0]:,.2f}**" if row and row[0] is not None else "No records yet."
+        if row and row[0] is not None:
+            text = f"🌐 Net Worth: **${row[0]:,.2f}**"
+        else:
+            text = "No records yet."
 
     if hasattr(message, 'reply_text'):
         await message.reply_text(text, parse_mode="Markdown")
