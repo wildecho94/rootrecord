@@ -75,10 +75,15 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loc = update.message.location
 
     async with engine.connect() as conn:
-        await conn.execute(text(
-            "INSERT INTO gps_records (user_id, latitude, longitude, timestamp) "
-            "VALUES (:uid, :lat, :lon, NOW())"
-        ), {"uid": user.id, "lat": loc.latitude, "lon": loc.longitude})
+        await conn.execute(text('''
+            INSERT INTO gps_records (user_id, latitude, longitude, timestamp, chat_id)
+            VALUES (:uid, :lat, :lon, NOW(), :chat_id)
+        '''), {
+            "uid": user.id,
+            "lat": loc.latitude,
+            "lon": loc.longitude,
+            "chat_id": update.effective_chat.id
+        })
         await conn.commit()
 
     await update.message.reply_text(f"Location logged: {loc.latitude:.6f}, {loc.longitude:.6f}")
