@@ -1,6 +1,5 @@
 # Plugin_Files/finance_plugin.py
 # Finance plugin for RootRecord - tracks income, expenses, debts, assets
-# Fixed: 'text' always defined in every code path in show_* handlers
 # Categories auto-create with type guessing
 # Commands: /finance (menu), /finance quickstats, /finance add <category> <amount> [desc]
 
@@ -8,7 +7,7 @@ import asyncio
 from pathlib import Path
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from sqlalchemy import text
 from utils.db_mysql import get_db, init_mysql
 
@@ -58,7 +57,6 @@ async def init_db():
         await session.commit()
     print("[finance_plugin] Finance tables + summary view ready")
 
-# Category guessing
 CATEGORY_TYPE_MAP = {
     'salary': 'income', 'paycheck': 'income', 'bonus': 'income',
     'rent': 'expense', 'groceries': 'expense', 'fuel': 'expense', 'gas': 'expense',
@@ -92,7 +90,6 @@ async def get_or_create_category(session, user_id: int, cat_name: str) -> int:
     result = await session.execute(text("SELECT LAST_INSERT_ID()"))
     return result.scalar()
 
-# Handlers
 async def finance_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("Quick Stats", callback_data="fin_quickstats")],
@@ -162,6 +159,7 @@ async def show_quickstats(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         message = query_or_update
         user_id = message.chat.id
 
+    text = "No records yet. Add one with /finance add"
     async for session in get_db():
         result = await session.execute(text('''
             SELECT current_balance, total_positive, total_negative, net_worth
@@ -170,15 +168,7 @@ async def show_quickstats(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         row = result.fetchone()
         if row and row[0] is not None:
             bal, pos, neg, nw = row
-            text = (
-                f"**Quick Stats**\n"
-                f"Balance: **${bal:,.2f}**\n"
-                f"Income+Assets: **${pos:,.2f}**\n"
-                f"Expenses+Debts: **${neg:,.2f}**\n"
-                f"Net Worth: **${nw:,.2f}**"
-            )
-        else:
-            text = "No records yet. Add one with /finance add"
+            text = f"**Quick Stats**\nBalance: **${bal:,.2f}**\nIncome+Assets: **${pos:,.2f}**\nExpenses+Debts: **${neg:,.2f}**\nNet Worth: **${nw:,.2f}**"
 
     if hasattr(message, 'reply_text'):
         await message.reply_text(text, parse_mode="Markdown")
@@ -193,6 +183,7 @@ async def show_categories(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         message = query_or_update
         user_id = message.chat.id
 
+    text = "No categories yet — add your first record!"
     async for session in get_db():
         result = await session.execute(text('''
             SELECT name, type FROM finance_categories WHERE user_id = :uid
@@ -200,8 +191,6 @@ async def show_categories(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         cats = result.fetchall()
         if cats:
             text = "**Your Categories**\n" + "\n".join(f"• {c[0]} ({c[1]})" for c in cats)
-        else:
-            text = "No categories yet — add your first record!"
 
     if hasattr(message, 'reply_text'):
         await message.reply_text(text, parse_mode="Markdown")
@@ -216,6 +205,7 @@ async def show_balance(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         message = query_or_update
         user_id = message.chat.id
 
+    text = "No records yet."
     async for session in get_db():
         result = await session.execute(text('''
             SELECT current_balance FROM finance_summary WHERE user_id = :uid
@@ -223,8 +213,6 @@ async def show_balance(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         row = result.fetchone()
         if row and row[0] is not None:
             text = f"💰 Current Balance: **${row[0]:,.2f}**"
-        else:
-            text = "No records yet."
 
     if hasattr(message, 'reply_text'):
         await message.reply_text(text, parse_mode="Markdown")
@@ -239,6 +227,7 @@ async def show_networth(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         message = query_or_update
         user_id = message.chat.id
 
+    text = "No records yet."
     async for session in get_db():
         result = await session.execute(text('''
             SELECT net_worth FROM finance_summary WHERE user_id = :uid
@@ -246,8 +235,6 @@ async def show_networth(query_or_update, context: ContextTypes.DEFAULT_TYPE):
         row = result.fetchone()
         if row and row[0] is not None:
             text = f"🌐 Net Worth: **${row[0]:,.2f}**"
-        else:
-            text = "No records yet."
 
     if hasattr(message, 'reply_text'):
         await message.reply_text(text, parse_mode="Markdown")
