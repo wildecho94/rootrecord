@@ -105,7 +105,7 @@ async def bot_main():
             if application.running:
                 logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
                 return
-            logger.warning("[telegram_plugin] Reusing existing application instance")
+            logger.warning("[telegram_plugin] Reusing existing application")
 
         logger.info("[telegram_plugin] Creating Application...")
         application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -121,7 +121,7 @@ async def bot_main():
         application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
         application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
 
-        # Dynamic command loading - only once, when creating fresh app
+        # Dynamic command loading - only runs once, here
         loaded = set()
         for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
             if path.name.startswith('__'):
