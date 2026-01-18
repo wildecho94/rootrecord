@@ -1,6 +1,6 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
-# Fixed: 'text' always defined in handlers, single polling start, log every update
+# Fixed: single polling start, no double load, log incoming updates, safe location handler
 
 import logging
 import asyncio
@@ -66,9 +66,18 @@ async def init_db():
         await conn.execute(text("SELECT 1"))
     logger.info("[telegram_plugin] DB connection tested")
 
+async def log_update(update: Update):
+    if update.message:
+        text = update.message.text or "[media/non-text]"
+        logger.info(f"Incoming message from {update.effective_user.id} ({update.effective_user.username or 'no username'}): {text}")
+    elif update.callback_query:
+        logger.info(f"Incoming callback from {update.effective_user.id}: {update.callback_query.data}")
+    else:
+        logger.info(f"Incoming update type: {type(update)}")
+
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await log_update(update)
     if not update.message or not update.message.location:
-        logger.debug("[telegram_plugin] Non-location message in location handler")
         return
 
     user = update.effective_user
@@ -86,21 +95,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Exception while handling update: {context.error}")
 
-async def log_update(update: Update):
-    if update.message:
-        logger.info(f"Incoming message from {update.effective_user.id}: {update.message.text or '[media/non-text]'}")
-    elif update.callback_query:
-        logger.info(f"Incoming callback from {update.effective_user.id}: {update.callback_query.data}")
-    else:
-        logger.info(f"Incoming update type: {type(update)}")
-
 async def bot_main():
     global application
 
     async with _init_lock:
         if application is not None:
             if application.running:
-                logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
+                logger.info("[telegram_plugin] Bot already running - skipping")
                 return
             logger.warning("[telegram_plugin] Reusing existing application")
 
@@ -150,7 +151,6 @@ async def bot_main():
 
         logger.info("[telegram_plugin] Polling active - bot is online and listening")
 
-        # Keep alive
         while True:
             await asyncio.sleep(3600)
 
