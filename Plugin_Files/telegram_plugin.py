@@ -1,7 +1,7 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
 # Token from config_telegram.json, absolute import for start
-# Single polling start enforced, no duplicates, log incoming updates
+# Added debug logging for incoming updates, single polling/load
 
 import logging
 import asyncio
@@ -101,11 +101,9 @@ async def bot_main():
     global application
 
     async with _init_lock:
-        if application is not None:
-            if application.running:
-                logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
-                return
-            logger.warning("[telegram_plugin] Reusing existing application")
+        if application is not None and application.running:
+            logger.info("[telegram_plugin] Bot already running - skipping duplicate start")
+            return
 
         logger.info("[telegram_plugin] Creating Application...")
         application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -121,7 +119,7 @@ async def bot_main():
         application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
         application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
 
-        # Dynamic command loading - only runs once, here
+        # Dynamic command loading - only once, inside guard
         loaded = set()
         for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
             if path.name.startswith('__'):
