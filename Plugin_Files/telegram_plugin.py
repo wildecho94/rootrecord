@@ -1,7 +1,7 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
 # Token from config_telegram.json, absolute import for start
-# Added debug logging for incoming updates, single polling/load
+# Single polling start enforced, no duplicates, log incoming updates
 
 import logging
 import asyncio
@@ -119,7 +119,7 @@ async def bot_main():
         application.add_handler(MessageHandler(filters.Regex(r'^/finance add '), add_record))
         application.add_handler(MessageHandler(filters.Regex(r'^/finance quickstats'), show_quickstats))
 
-        # Dynamic command loading - only once, inside guard
+        # Dynamic command loading - only once
         loaded = set()
         for path in sorted(COMMANDS_FOLDER.glob("*_cmd.py")):
             if path.name.startswith('__'):
