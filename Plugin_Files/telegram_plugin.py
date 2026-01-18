@@ -1,6 +1,6 @@
 # Plugin_Files/telegram_plugin.py
 # RootRecord Telegram bot core - polling, commands, location handling
-# Fixed: only one bot_main task runs (guard + single initialize/start/polling), no duplicate dynamic loading
+# Fixed: single bot_main execution (lock + check), single command load, no double polling/start
 
 import logging
 import asyncio
@@ -57,7 +57,7 @@ def load_token():
 
 BOT_TOKEN = load_token()
 
-# Global app + lock to prevent double init
+# Global app + lock to prevent duplicate init
 application: Application = None
 _init_lock = asyncio.Lock()
 
@@ -67,11 +67,12 @@ async def init_db():
     logger.info("[telegram_plugin] DB connection tested")
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.location:
+        logger.debug("[telegram_plugin] Non-location message received, ignoring for location handler")
+        return
+
     user = update.effective_user
     loc = update.message.location
-    if not loc:
-        await update.message.reply_text("No location received.")
-        return
 
     async with engine.connect() as conn:
         await conn.execute(text(
@@ -89,11 +90,15 @@ async def bot_main():
     global application
 
     async with _init_lock:
-        if application and application.running:
-            logger.info("[telegram_plugin] Application already running - skipping")
-            return
+        if application is not None:
+            if application.running:
+                logger.info("[telegram_plugin] Application already running - skipping duplicate start")
+                return
+            else:
+                logger.warning("[telegram_plugin] Application exists but not running - reusing")
 
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        if application is None:
+            application = ApplicationBuilder().token(BOT_TOKEN).build()
 
         # Core handlers
         application.add_handler(CommandHandler("start", start))
@@ -135,6 +140,8 @@ async def bot_main():
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True
         )
+
+        logger.info("[telegram_plugin] Polling active - bot is online")
 
         # Keep alive
         while True:
